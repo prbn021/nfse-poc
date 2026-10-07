@@ -9,7 +9,9 @@ Rascunho gerado no Bootstrap (T-000) em 2026-10-07. Marcações:
 
 ## §0 Regras para agentes
 
-Approved: _(pendente; o humano escreve `Approved: AAAA-MM-DD` aqui)_
+Approved: 2026-10-07
+
+(Aprovação dada pelo humano na conversa de 2026-10-07 e transcrita aqui pelo agente. A aprovação cobre o spec; os candidatos a invariante de §4 continuam pendentes em Q-01.)
 
 - Quem aprova: Paulo Reis (único autor em `git log`) aprova o spec, os invariantes, os portões de fase e é o único que marca tarefas como `done`.
 - Regras específicas do projeto, além do `CLAUDE.md`: nenhuma ainda. As candidatas estão em §11 (Q-01).
