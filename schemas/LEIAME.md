@@ -6,3 +6,7 @@ e extraia aqui TODOS os .xsd na mesma pasta (o DPS importa os demais:
 tipos simples, tipos complexos, xmldsig-core-schema).
 
 O arquivo de entrada para validar a DPS é o `DPS_v*.xsd`.
+
+Os arquivos oficiais não são editados. A validação offline usa uma cópia gerada em
+`schemas/<versão>-local/` (fora do git) por `scripts/preparar_xsd.py`, sem os `^` e `$`
+dos padrões; `scripts/gerar_dps.py` a regenera a cada execução.

@@ -45,9 +45,9 @@ O projeto hoje pode afirmar apenas:
 | Alegação | Evidência |
 |---|---|
 | Gera um XML de DPS a partir de dataclasses | `src/dps.py`, `tests/test_dps.py` (5 testes passam) |
-| O XML de exemplo é válido contra `DPS_v1.01.xsd` **exceto** pelo padrão de `serie` | §8 baseline e diagnóstico |
+| O XML de exemplo é válido contra uma cópia local do `DPS_v1.01.xsd` que difere do oficial em uma linha (âncoras do padrão de `serie`) | G-2; `tests/test_xsd.py` (DEC-003) |
 
-Não pode afirmar: que emite NFS-e, que assina, que transmite, que é "válido contra o XSD oficial" sem ressalva, nem qualquer termo da lista do `CLAUDE.md` ("seguro", "pronto para produção" etc.). O `README.md` é um brainstorming e não faz alegações desse tipo.
+Não pode afirmar: que emite NFS-e, que assina, que transmite, que é "válido contra o XSD oficial" sem ressalva, que o servidor aceita a DPS, nem qualquer termo da lista do `CLAUDE.md` ("seguro", "pronto para produção" etc.). O `README.md` é um brainstorming e não faz alegações desse tipo.
 
 ## §3 Arquitetura
 
@@ -56,13 +56,16 @@ Existente:
 ```
 scripts/gerar_dps.py ──> src/config.py  (lê .env via python-dotenv)
         │
-        └──────────────> src/dps.py     (dataclasses + lxml: modelo, para_xml, validar_xml)
-tests/test_dps.py ─────> src/dps.py, src/config.py (só RAIZ)
+        ├──────────────> src/dps.py     (dataclasses + lxml: modelo, para_xml, validar_xml)
+        └──────────────> src/xsd.py     (cópia local dos XSDs sem âncoras)
+scripts/preparar_xsd.py ─> src/config.py, src/xsd.py
+tests/ ────────────────> src/dps.py, src/xsd.py, src/config.py (só RAIZ)
 ```
 
 - `src/config.py`: `Config` imutável; `NFSE_AMBIENTE` tem default `homologacao`; `tp_amb` 1=produção, 2=homologação.
 - `src/dps.py`: `Prestador`, `Tomador`, `Servico`, `Valores`, `Dps`; `gerar_id`; `para_xml` (sem assinatura); `localizar_xsd_dps`; `validar_xml`.
-- `scripts/preparar_xsd.py`: **não rastreado** no git; gera `schemas/1.01-local` removendo `^`/`$` dos padrões. É o plano candidato de T-001; não foi executado nem alterado no Bootstrap.
+- `src/xsd.py`: `remover_ancoras`, `dir_local`, `preparar_copia_local`. Gera `schemas/<versão>-local/` (ignorada no git) a partir dos oficiais, tirando só `^` inicial e `$` final dos `xs:pattern`; recusa escrever na pasta de origem (DEC-003).
+- `scripts/preparar_xsd.py`: gera a cópia local sob demanda. `scripts/gerar_dps.py` a regenera a cada execução e valida contra ela.
 
 Planejado no `README.md`, ainda inexistente: `certificado.py`, `assinatura.py`, `codec.py`, `client.py`, `erros.py`, `scripts/emitir.py`, `consultar.py`, `baixar_danfse.py`.
 
@@ -135,17 +138,17 @@ Preparação a partir de um checkout limpo (hoje **não** reproduzível, ver T-0
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env   # e ajustar NFSE_XSD_DIR=schemas/1.01
+Copy-Item .env.example .env
 ```
 
 | ID | Portão | Comando | Quando |
 |---|---|---|---|
 | G-1 | Testes | `.\.venv\Scripts\python.exe -m pytest -q -rs` | Toda tarefa |
 | G-2 | Verificação do projeto: gerar e validar a DPS | `.\.venv\Scripts\python.exe scripts\gerar_dps.py` (sucesso = código de saída 0) | Toda tarefa |
+| G-3 | XSDs oficiais intocados | `git diff --exit-code main -- schemas/1.00 schemas/1.01` | Toda tarefa |
 | – | Formatação | inexistente | proposta em T-003 |
 | – | Lint com avisos como erro | inexistente | proposta em T-003 |
 | – | Instalação travada / build | inexistente | proposta em T-002 |
-| – | Caminhos congelados | inexistente | depende de Q-01/Q-02 |
 
 ### Baseline (2026-10-07, commit `7709aee`, Python 3.11.9, lxml 6.1.3)
 
@@ -159,6 +162,12 @@ Copy-Item .env.example .env   # e ajustar NFSE_XSD_DIR=schemas/1.01
 ```
 
 G-2 depende do `.env` local (`NFSE_XSD_DIR=schemas/1.01`). Com o `.env.example` sem ajuste (`NFSE_XSD_DIR=schemas`) o script não acha o XSD e sai com código 2 `[INFERRED]` (lido no código, não executado).
+
+### Depois de T-001 (2026-10-07, branch `t-001-validacao-serie-xsd`)
+
+- G-1: `26 passed`, nenhum pulado.
+- G-2: código de saída 0, `[OK] Válida contra DPS_v1.01.xsd (cópia local em …\schemas.01-local)`. Também sai com 0 sem `.env` (executado), porque o default de `NFSE_XSD_DIR` passou a ser `schemas/1.01`.
+- G-3: sem diferenças.
 
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
@@ -182,7 +191,7 @@ Portões de fase: nenhum definido; até lá, todo PR é um portão.
 | ID    | Título | Deps | Reads | Status | Critérios de aceitação |
 |-------|--------|------|-------|--------|------------------------|
 | T-000 | Bootstrap: spec, fontes e baseline | – | CLAUDE.md | review | `docs/SPEC.md` e `docs/SOURCES.md` no branch `t-000-spec`; baseline de G-1 e G-2 registrado; humano escreve `Approved:` em §0 |
-| T-001 | Validação offline da DPS falha no padrão de `serie` | T-000, Q-01, Q-04 | §4, §5, §6, §8 | todo | (1) G-2 sai com código 0 e imprime `[OK] Válida`; (2) `test_xml_valido_contra_xsd_oficial` deixa de ser pulado e passa; (3) `git diff main -- schemas/1.00 schemas/1.01` vazio; (4) teste negativo: `serie` inválida (ex.: `abc`, 6 dígitos) continua rejeitada pelo esquema usado na validação; (5) se houver cópia derivada: é regenerável por script, ignorada no git, e um teste garante que ela difere dos oficiais só nas âncoras `^`/`$` de início e fim de `xs:pattern` (hoje, 1 linha); (6) `.env.example` e o default de `NFSE_XSD_DIR` coerentes com o local real dos XSDs |
+| T-001 | Validação offline da DPS falha no padrão de `serie` | T-000, Q-01, Q-04 | §4, §5, §6, §8 | review | (1) G-2 sai com código 0 e imprime `[OK] Válida`; (2) `test_xml_valido_contra_xsd_oficial` deixa de ser pulado e passa; (3) `git diff main -- schemas/1.00 schemas/1.01` vazio; (4) teste negativo: `serie` inválida (ex.: `abc`, 6 dígitos) continua rejeitada pelo esquema usado na validação; (5) se houver cópia derivada: é regenerável por script, ignorada no git, e um teste garante que ela difere dos oficiais só nas âncoras `^`/`$` de início e fim de `xs:pattern` (hoje, 1 linha); (6) `.env.example` e o default de `NFSE_XSD_DIR` coerentes com o local real dos XSDs |
 | T-002 | Fixar toolchain e dependências | T-000 | §6, §8 | todo | Versão do Python fixada; dependências com versões exatas e lock; instalação travada documentada em §8 e funcionando em checkout limpo. Ferramenta de lock: Q-05 |
 | T-003 | Propor portões de formatação e lint | T-000 | §8 | todo | Proposta apresentada ao humano (ferramenta, regras, custo); nada instalado sem aprovação (Q-05) |
 | T-004 | Certificado A1: carregar PFX (`certificado.py`) | T-001, Q-03 | §7 | blocked (Q-03) | A definir com o humano |
@@ -204,6 +213,12 @@ Decision: a PoC só usa produção restrita (homologação). Decisão do humano,
 Alternatives: nenhuma considerada.
 Consequences: §1, §7. Se vira invariante com trava em código: Q-01 (C-2).
 
+### DEC-003: Validação offline contra cópia local dos XSDs, sem âncoras (2026-10-07, T-001)
+Context: o padrão de `TSSerieDPS` no XSD oficial v1.01 traz `^` e `$`, literais em XML Schema, e o libxml2 rejeita qualquer série (§8, diagnóstico). Os oficiais não devem ser editados (candidato C-1).
+Decision: plano (a) de Q-04, escolhido pelo humano em 2026-10-07: cópia gerada em `schemas/1.01-local`, ignorada no git. Escolhas de implementação do agente: a lógica fica em `src/xsd.py` e opera em bytes (preserva BOM e CRLF); remove só `^` no início e `$` não escapado no fim do valor de `xs:pattern`; `gerar_dps.py` regenera a cópia a cada execução, para ela nunca ficar desatualizada; os testes geram a cópia em diretório temporário; `scripts/preparar_xsd.py` (antes não rastreado) foi reescrito como casca fina sobre `src/xsd.py`; `.gitignore` ganhou `schemas/*-local/`; o default de `NFSE_XSD_DIR` e o `.env.example` passaram a `schemas/1.01`; G-3 entrou em §8.
+Alternatives: (b) corrigir em memória ao carregar o esquema: sem arquivo derivado, mas exigiria um resolvedor próprio para os `xs:include` e não deixa a diferença inspecionável em disco. Editar os oficiais: rejeitado (C-1).
+Consequences: "válida" passa a significar válida contra a cópia local, que um teste fixa em exatamente uma linha de diferença (`tiposSimples_v1.01.xsd:161`); uma nova versão do pacote oficial que mude isso quebra o teste de propósito. Não prova aceitação pelo servidor. §2, §3, §8, §9, §11 atualizados.
+
 ## §11 Perguntas em aberto
 
 | ID | Pergunta | Bloqueia |
@@ -211,7 +226,7 @@ Consequences: §1, §7. Se vira invariante com trava em código: Q-01 (C-2).
 | Q-01 | Aprovar, ajustar ou rejeitar cada candidato a invariante de §4 (C-1 schemas oficiais intocados; C-2 default homologação; C-3 certificados e senhas fora do git; C-4 `Id` com 45 caracteres). Para C-2: basta o default, ou `producao` deve exigir uma confirmação explícita extra (ou ser recusado nesta fase, dado DEC-002)? | T-001, todas |
 | Q-02 | O que fica congelado em §5: `schemas/1.01`? também `schemas/1.00` (não usado), ou removê-lo? As pastas vazias `schemas/Componente_Schemas` e `schemas/Componente_recepcao` (não rastreadas) têm algum uso? | T-001 |
 | Q-03 | Certificado: `certs/lika-2026.pfx` já existe e o `.env` tem senha, mas o contexto dizia que ainda não há A1. É o certificado do cliente? Há autorização do titular para uso em homologação? Onde a DPS de teste pode ser emitida (CNPJ do titular)? Como tratar dados reais em `out/` e em logs? | T-004, T-007 |
-| Q-04 | T-001, abordagem: (a) cópia gerada `schemas/1.01-local`, ignorada no git, com script e teste de diferença mínima (seu plano; recomendo, restringindo a remoção às âncoras de início/fim); (b) corrigir em memória ao carregar o esquema, sem arquivo derivado. Em (a), `scripts/preparar_xsd.py` (não rastreado) entra como base? E `.gitignore` ganha `schemas/*-local/`? | T-001 |
+| Q-04 | **Respondida em 2026-10-07: (a), ver DEC-003.** T-001, abordagem: (a) cópia gerada `schemas/1.01-local`, ignorada no git, com script e teste de diferença mínima (seu plano; recomendo, restringindo a remoção às âncoras de início/fim); (b) corrigir em memória ao carregar o esquema, sem arquivo derivado. Em (a), `scripts/preparar_xsd.py` (não rastreado) entra como base? E `.gitignore` ganha `schemas/*-local/`? | T-001 |
 | Q-05 | Ferramentas a adicionar: lock (pip-tools, uv, `pip freeze` com hashes), formatador e linter (ex.: ruff), CI (GitHub Actions; há remoto `origin` no GitHub). | T-002, T-003 |
 | Q-06 | Bibliotecas: nfelib só para bindings da DPS, ou manter o modelo próprio? Assinatura: signxml ou lxml+xmlsec? HTTP: httpx ou requests? | T-005, T-007 |
 | Q-07 | Escopo e marcos: M1–M3 de §9 estão certos? Os passos 4 e 5 do README (decodificar retorno; consulta por chave e DANFSe) entram nesta fase? Critério de sucesso de M1 proposto: "G-1 e G-2 passam, com o teste de XSD rodando". | planejamento |

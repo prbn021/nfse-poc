@@ -1,4 +1,4 @@
-"""Gera uma DPS de exemplo, salva em out/ e valida contra o XSD oficial (se estiver em schemas/)."""
+"""Gera uma DPS de exemplo, salva em out/ e valida contra a cópia local dos XSDs oficiais."""
 import sys
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import carregar_config
 from src.dps import (Dps, Prestador, Servico, Tomador, Valores,
                      localizar_xsd_dps, para_xml, validar_xml)
+from src.xsd import preparar_copia_local
 
 BRT = timezone(timedelta(hours=-3))
 
@@ -41,17 +42,17 @@ def main() -> int:
     arq.write_bytes(xml)
     print(f"DPS gerada: {arq}\n{xml.decode()}\n")
 
-    xsd = localizar_xsd_dps(cfg.xsd_dir)
-    if not xsd:
+    if not localizar_xsd_dps(cfg.xsd_dir):
         print(f"[!] XSD não encontrado em {cfg.xsd_dir}. Veja schemas/LEIAME.md.")
         return 2
+    xsd = localizar_xsd_dps(preparar_copia_local(cfg.xsd_dir))
     erros = validar_xml(xml, xsd)
     if erros:
         print(f"[X] Inválida contra {xsd.name}:")
         for e in erros:
             print("   -", e)
         return 1
-    print(f"[OK] Válida contra {xsd.name}")
+    print(f"[OK] Válida contra {xsd.name} (cópia local em {xsd.parent})")
     return 0
 
 

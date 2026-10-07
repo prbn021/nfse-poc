@@ -7,6 +7,7 @@ from lxml import etree
 from src.config import RAIZ
 from src.dps import (NS, Dps, Prestador, Servico, Tomador, Valores, gerar_id,
                      localizar_xsd_dps, para_xml, validar_xml)
+from src.xsd import preparar_copia_local
 
 BRT = timezone(timedelta(hours=-3))
 
@@ -56,9 +57,8 @@ def test_cnpj_invalido_e_rejeitado():
         Prestador(cnpj="123", inscricao_municipal=None, op_simp_nac=3)
 
 
-XSD = localizar_xsd_dps(RAIZ / "schemas")
-
-
-@pytest.mark.skipif(XSD is None, reason="XSDs oficiais não estão em schemas/")
-def test_xml_valido_contra_xsd_oficial():
-    assert validar_xml(para_xml(_dps()), XSD) == []
+def test_xml_valido_contra_xsd_oficial(tmp_path):
+    # Valida contra a cópia local dos XSDs oficiais (ver src/xsd.py): o padrão de
+    # `serie` no XSD oficial traz ^ e $, que em XML Schema são caracteres literais.
+    copia = preparar_copia_local(RAIZ / "schemas" / "1.01", tmp_path / "1.01-local")
+    assert validar_xml(para_xml(_dps()), localizar_xsd_dps(copia)) == []
