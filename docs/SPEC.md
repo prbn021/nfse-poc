@@ -84,12 +84,22 @@ Aprovados pelo humano em 2026-10-07 (DEC-004).
 
 ## §5 Interfaces e áreas congeladas
 
-Nada está congelado até a aprovação. Candidatos (Q-02):
+Decididas pelo humano em 2026-10-07 (DEC-005).
 
-- Código/dados congelados: `schemas/1.01/` (C-1). `schemas/1.00/` também está rastreado e não é usado por nenhum código: congelar, ou remover?
-- Interface: formato do XML da DPS, ditado pelo XSD v1.01 (`versao="1.01"`, namespace `http://www.sped.fazenda.gov.br/nfse`).
-- Configuração: variáveis `NFSE_*` em `.env.example`.
-- Dados de teste "golden": não existem. `out/` é ignorado no git.
+Código e dados congelados (nunca editados):
+
+- `schemas/1.01/` (INV-01), conferido por G-3.
+
+Interfaces congeladas (mudam só com nova versão, dados de teste regenerados e nova DEC):
+
+- Formato do XML da DPS: layout v1.01, `versao="1.01"`, namespace `http://www.sped.fazenda.gov.br/nfse`, conforme `DPS_v1.01.xsd`.
+
+Não congelado:
+
+- Variáveis `NFSE_*` de `.env.example`: ainda devem mudar até a transmissão funcionar.
+- `schemas/1.00/`: não é usado e será removido do repositório em T-009.
+
+Dados de teste "golden": não existem. `out/` é ignorado no git.
 
 ## §6 Dependências e versões
 
@@ -198,6 +208,7 @@ Portões de fase: nenhum definido; até lá, todo PR é um portão.
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004, Q-06 | §5, §6 | todo | A definir; exige `[VERIFY]` do perfil de assinatura exigido pelo padrão nacional |
 | T-006 | Codec GZip+Base64 (`codec.py`) | T-001 | §5 | todo | A definir; ida e volta sem perda |
 | T-008 | Garantias de INV-02 e INV-03 | T-001 | §4, §7, §8 | todo | (1) `carregar_config()` sem variáveis de ambiente devolve `homologacao`; (2) `NFSE_AMBIENTE=producao` levanta erro claro citando DEC-002/INV-02; (3) portão novo em §8 que falha se `git ls-files` contiver `.env`, `*.pfx`, `*.p12` ou `*.pem`; (4) `.env.example` deixa de anunciar `producao` como opção |
+| T-009 | Remover `schemas/1.00` do repositório | T-001 | §5, §8 | todo | (1) `schemas/1.00/` removido do git; (2) G-3 passa a conferir só `schemas/1.01`; (3) `schemas/LEIAME.md` e `docs/SOURCES.md` coerentes com a remoção; (4) G-1 e G-2 continuam passando |
 | T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
 
 ## §10 Registro de decisões
@@ -226,12 +237,18 @@ Decision: do humano, na conversa de 2026-10-07: aprovar os quatro. INV-02 vai al
 Alternatives: INV-02 só com o default (rejeitado: bastaria uma linha no `.env` para apontar para produção); INV-04 só com o tamanho.
 Consequences: §0, §4, §9 (T-008 criada para as garantias que faltam), §11. Liberar produção no futuro exige nova DEC.
 
+### DEC-005: Áreas e interfaces congeladas (2026-10-07, T-000)
+Context: Q-02 perguntava o que congelar em §5; `schemas/1.00` estava versionado sem uso e havia duas pastas vazias não rastreadas em `schemas/`.
+Decision: do humano, na conversa de 2026-10-07: congelar `schemas/1.01` (já INV-01) e o formato do XML da DPS em v1.01; remover `schemas/1.00` do repositório (T-009); apagar as pastas vazias `schemas/Componente_Schemas` e `schemas/Componente_recepcao` (apagadas nesta data; não eram rastreadas).
+Alternatives: congelar `schemas/1.00` junto (rejeitado: material sem uso); congelar também as variáveis `NFSE_*` (adiado: ainda vão mudar).
+Consequences: §5, §9 (T-009), §11. Trocar a versão do layout da DPS passa a exigir nova DEC.
+
 ## §11 Perguntas em aberto
 
 | ID | Pergunta | Bloqueia |
 |---|---|---|
 | Q-01 | **Respondida em 2026-10-07: os quatro aprovados, ver §4 e DEC-004.** Aprovar, ajustar ou rejeitar cada candidato a invariante de §4 (C-1 schemas oficiais intocados; C-2 default homologação; C-3 certificados e senhas fora do git; C-4 `Id` com 45 caracteres). Para C-2: basta o default, ou `producao` deve exigir uma confirmação explícita extra (ou ser recusado nesta fase, dado DEC-002)? | T-001, todas |
-| Q-02 | O que fica congelado em §5: `schemas/1.01`? também `schemas/1.00` (não usado), ou removê-lo? As pastas vazias `schemas/Componente_Schemas` e `schemas/Componente_recepcao` (não rastreadas) têm algum uso? | T-001 |
+| Q-02 | **Respondida em 2026-10-07, ver §5 e DEC-005.** O que fica congelado em §5: `schemas/1.01`? também `schemas/1.00` (não usado), ou removê-lo? As pastas vazias `schemas/Componente_Schemas` e `schemas/Componente_recepcao` (não rastreadas) têm algum uso? | T-001 |
 | Q-03 | Certificado: `certs/lika-2026.pfx` já existe e o `.env` tem senha, mas o contexto dizia que ainda não há A1. É o certificado do cliente? Há autorização do titular para uso em homologação? Onde a DPS de teste pode ser emitida (CNPJ do titular)? Como tratar dados reais em `out/` e em logs? | T-004, T-007 |
 | Q-04 | **Respondida em 2026-10-07: (a), ver DEC-003.** T-001, abordagem: (a) cópia gerada `schemas/1.01-local`, ignorada no git, com script e teste de diferença mínima (seu plano; recomendo, restringindo a remoção às âncoras de início/fim); (b) corrigir em memória ao carregar o esquema, sem arquivo derivado. Em (a), `scripts/preparar_xsd.py` (não rastreado) entra como base? E `.gitignore` ganha `schemas/*-local/`? | T-001 |
 | Q-05 | Ferramentas a adicionar: lock (pip-tools, uv, `pip freeze` com hashes), formatador e linter (ex.: ruff), CI (GitHub Actions; há remoto `origin` no GitHub). | T-002, T-003 |
