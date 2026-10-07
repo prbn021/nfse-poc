@@ -211,6 +211,16 @@ Portões de fase: nenhum definido; até lá, todo PR é um portão.
 | T-009 | Remover `schemas/1.00` do repositório | T-001 | §5, §8 | todo | (1) `schemas/1.00/` removido do git; (2) G-3 passa a conferir só `schemas/1.01`; (3) `schemas/LEIAME.md` e `docs/SOURCES.md` coerentes com a remoção; (4) G-1 e G-2 continuam passando |
 | T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
 
+### Ponto de retomada (2026-10-07)
+
+Estado ao fim da sessão de 2026-10-07, para continuar em outra máquina:
+
+- T-000 e T-001 em `review`, aguardando o humano marcar `done`. Branches `t-000-spec` e `t-001-validacao-serie-xsd` publicadas em `origin`; `main` só tem o commit inicial.
+- §11 respondidas: Q-01, Q-02, Q-04. Parcial: Q-03. Ainda não discutidas: Q-05 a Q-11, nessa ordem.
+- Tarefas criadas e não iniciadas: T-008 (trava de `producao` e portão de segredos), T-009 (remover `schemas/1.00`).
+- O humano já tem, fora do repositório: a documentação oficial (PDFs e planilhas) e uma nota fiscal antiga do cliente. Destino combinado: documentação em `docs/referencia/` (ignorada no git); nota fiscal em `certs/` ou `out/` (ignoradas), por conter dados reais. Com elas dá para fechar os `[VERIFY]` de §6 e montar os dados reais do prestador, que ficam em arquivo local fora do git, nunca no código nem nos testes.
+- Não viajam pelo git e precisam ser recriados na outra máquina: `.venv`, `.env` (copiar de `.env.example`), `certs/*.pfx` e a senha, chave SSH, `git config user.name`/`user.email`, `docs/referencia/`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
+
 ## §10 Registro de decisões
 
 ### DEC-001: Dataclasses em vez de pydantic para o modelo da DPS (2026-10-07, T-000)
@@ -249,7 +259,7 @@ Consequences: §5, §9 (T-009), §11. Trocar a versão do layout da DPS passa a 
 |---|---|---|
 | Q-01 | **Respondida em 2026-10-07: os quatro aprovados, ver §4 e DEC-004.** Aprovar, ajustar ou rejeitar cada candidato a invariante de §4 (C-1 schemas oficiais intocados; C-2 default homologação; C-3 certificados e senhas fora do git; C-4 `Id` com 45 caracteres). Para C-2: basta o default, ou `producao` deve exigir uma confirmação explícita extra (ou ser recusado nesta fase, dado DEC-002)? | T-001, todas |
 | Q-02 | **Respondida em 2026-10-07, ver §5 e DEC-005.** O que fica congelado em §5: `schemas/1.01`? também `schemas/1.00` (não usado), ou removê-lo? As pastas vazias `schemas/Componente_Schemas` e `schemas/Componente_recepcao` (não rastreadas) têm algum uso? | T-001 |
-| Q-03 | Certificado: `certs/lika-2026.pfx` já existe e o `.env` tem senha, mas o contexto dizia que ainda não há A1. É o certificado do cliente? Há autorização do titular para uso em homologação? Onde a DPS de teste pode ser emitida (CNPJ do titular)? Como tratar dados reais em `out/` e em logs? | T-004, T-007 |
+| Q-03 | **Parcial em 2026-10-07:** o humano confirmou que `lika-2026.pfx` é o certificado do cliente e que o titular autorizou o uso em produção restrita. Faltam duas respostas: (a) desenvolver T-004 e T-005 com certificado autoassinado de teste, deixando o do cliente só para T-007? (b) só dados fictícios nos testes automatizados e nunca senha ou conteúdo de certificado em logs? Texto original: Certificado: `certs/lika-2026.pfx` já existe e o `.env` tem senha, mas o contexto dizia que ainda não há A1. É o certificado do cliente? Há autorização do titular para uso em homologação? Onde a DPS de teste pode ser emitida (CNPJ do titular)? Como tratar dados reais em `out/` e em logs? | T-004, T-007 |
 | Q-04 | **Respondida em 2026-10-07: (a), ver DEC-003.** T-001, abordagem: (a) cópia gerada `schemas/1.01-local`, ignorada no git, com script e teste de diferença mínima (seu plano; recomendo, restringindo a remoção às âncoras de início/fim); (b) corrigir em memória ao carregar o esquema, sem arquivo derivado. Em (a), `scripts/preparar_xsd.py` (não rastreado) entra como base? E `.gitignore` ganha `schemas/*-local/`? | T-001 |
 | Q-05 | Ferramentas a adicionar: lock (pip-tools, uv, `pip freeze` com hashes), formatador e linter (ex.: ruff), CI (GitHub Actions; há remoto `origin` no GitHub). | T-002, T-003 |
 | Q-06 | Bibliotecas: nfelib só para bindings da DPS, ou manter o modelo próprio? Assinatura: signxml ou lxml+xmlsec? HTTP: httpx ou requests? | T-005, T-007 |
