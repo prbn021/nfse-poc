@@ -14,7 +14,7 @@ Approved: 2026-10-07
 (Aprovação dada pelo humano na conversa de 2026-10-07 e transcrita aqui pelo agente. A aprovação cobre o spec; os candidatos a invariante de §4 continuam pendentes em Q-01.)
 
 - Quem aprova: Paulo Reis (único autor em `git log`) aprova o spec, os invariantes, os portões de fase e é o único que marca tarefas como `done`.
-- Regras específicas do projeto, além do `CLAUDE.md`: nenhuma ainda. As candidatas estão em §11 (Q-01).
+- Regras específicas do projeto, além do `CLAUDE.md`: os invariantes de §4.
 - Idioma: docs, código e mensagens em português, como no repositório existente `[INFERRED]`.
 
 ## §1 Objetivos e não-objetivos
@@ -73,14 +73,14 @@ Fronteiras de dependência: nenhuma definida no repositório. Proposta em Q-08; 
 
 ## §4 Invariantes
 
-Nenhum invariante está em vigor. Os candidatos abaixo aguardam decisão (Q-01) e só recebem número `INV-nn` depois de aprovados.
+Aprovados pelo humano em 2026-10-07 (DEC-004).
 
-| Candidato | Enunciado | O que observei | Verificação proposta |
-|---|---|---|---|
-| C-1 | Os schemas oficiais em `schemas/1.01` nunca são editados | Rastreados no git; hashes SHA-256 registrados em `docs/SOURCES.md` | Portão: `git diff --exit-code main -- schemas/1.01` (e talvez teste de hash) |
-| C-2 | O ambiente padrão é homologação | `config.py` usa default `homologacao`; `.env.example` idem, com URLs `producaorestrita` | Teste de `carregar_config()` sem variáveis de ambiente |
-| C-3 | Certificados e senhas nunca vão ao git | `.gitignore` cobre `.env`, `certs/`, `*.pfx`, `*.p12`, `*.pem`; `git ls-files` não lista nenhum | Portão que falha se `git ls-files` contiver esses padrões |
-| C-4 | O `Id` da DPS tem 45 caracteres | Confirmado no XSD (`TSIdDPS`: `maxLength 45`, padrão `DPS[0-9]{42}`); `gerar_id` tem `assert` e teste | `test_id_tem_45_caracteres_e_composicao_correta` (existe) |
+| ID | Enunciado | Garantido por |
+|---|---|---|
+| INV-01 | Os schemas oficiais em `schemas/1.01` nunca são editados | G-3 (`git diff --exit-code main -- schemas/1.00 schemas/1.01`) |
+| INV-02 | O ambiente padrão é homologação, e `producao` é recusado pelo código enquanto durar a PoC | Pendente: T-008 (hoje `config.py` tem o default, mas ainda aceita `producao`) |
+| INV-03 | Certificados e senhas nunca vão ao git | `.gitignore` (`.env`, `certs/`, `*.pfx`, `*.p12`, `*.pem`); portão pendente: T-008 |
+| INV-04 | O `Id` da DPS é `DPS` + 42 dígitos (45 posições): município (7) + tipo de inscrição federal (1) + inscrição federal (14) + série (5) + número da DPS (15) | `test_id_tem_45_caracteres_e_composicao_correta` |
 
 ## §5 Interfaces e áreas congeladas
 
@@ -197,6 +197,7 @@ Portões de fase: nenhum definido; até lá, todo PR é um portão.
 | T-004 | Certificado A1: carregar PFX (`certificado.py`) | T-001, Q-03 | §7 | blocked (Q-03) | A definir com o humano |
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004, Q-06 | §5, §6 | todo | A definir; exige `[VERIFY]` do perfil de assinatura exigido pelo padrão nacional |
 | T-006 | Codec GZip+Base64 (`codec.py`) | T-001 | §5 | todo | A definir; ida e volta sem perda |
+| T-008 | Garantias de INV-02 e INV-03 | T-001 | §4, §7, §8 | todo | (1) `carregar_config()` sem variáveis de ambiente devolve `homologacao`; (2) `NFSE_AMBIENTE=producao` levanta erro claro citando DEC-002/INV-02; (3) portão novo em §8 que falha se `git ls-files` contiver `.env`, `*.pfx`, `*.p12` ou `*.pem`; (4) `.env.example` deixa de anunciar `producao` como opção |
 | T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
 
 ## §10 Registro de decisões
@@ -211,7 +212,7 @@ Consequences: o README fica desatualizado nesse ponto (Q-09). §3.
 Context: a API tem produção e produção restrita; `config.py` aceita `producao`.
 Decision: a PoC só usa produção restrita (homologação). Decisão do humano, informada na conversa de 2026-10-07.
 Alternatives: nenhuma considerada.
-Consequences: §1, §7. Se vira invariante com trava em código: Q-01 (C-2).
+Consequences: §1, §7. Virou INV-02, com trava em código a implementar em T-008.
 
 ### DEC-003: Validação offline contra cópia local dos XSDs, sem âncoras (2026-10-07, T-001)
 Context: o padrão de `TSSerieDPS` no XSD oficial v1.01 traz `^` e `$`, literais em XML Schema, e o libxml2 rejeita qualquer série (§8, diagnóstico). Os oficiais não devem ser editados (candidato C-1).
@@ -219,11 +220,17 @@ Decision: plano (a) de Q-04, escolhido pelo humano em 2026-10-07: cópia gerada 
 Alternatives: (b) corrigir em memória ao carregar o esquema: sem arquivo derivado, mas exigiria um resolvedor próprio para os `xs:include` e não deixa a diferença inspecionável em disco. Editar os oficiais: rejeitado (C-1).
 Consequences: "válida" passa a significar válida contra a cópia local, que um teste fixa em exatamente uma linha de diferença (`tiposSimples_v1.01.xsd:161`); uma nova versão do pacote oficial que mude isso quebra o teste de propósito. Não prova aceitação pelo servidor. §2, §3, §8, §9, §11 atualizados.
 
+### DEC-004: Invariantes INV-01 a INV-04 aprovados (2026-10-07, T-000)
+Context: os quatro candidatos de Q-01 aguardavam decisão; nenhum invariante estava em vigor.
+Decision: do humano, na conversa de 2026-10-07: aprovar os quatro. INV-02 vai além do default: o código recusa `producao` durante a PoC. INV-04 usa a redação completa do XSD (`TSIdDPS`), não só "45 caracteres".
+Alternatives: INV-02 só com o default (rejeitado: bastaria uma linha no `.env` para apontar para produção); INV-04 só com o tamanho.
+Consequences: §0, §4, §9 (T-008 criada para as garantias que faltam), §11. Liberar produção no futuro exige nova DEC.
+
 ## §11 Perguntas em aberto
 
 | ID | Pergunta | Bloqueia |
 |---|---|---|
-| Q-01 | Aprovar, ajustar ou rejeitar cada candidato a invariante de §4 (C-1 schemas oficiais intocados; C-2 default homologação; C-3 certificados e senhas fora do git; C-4 `Id` com 45 caracteres). Para C-2: basta o default, ou `producao` deve exigir uma confirmação explícita extra (ou ser recusado nesta fase, dado DEC-002)? | T-001, todas |
+| Q-01 | **Respondida em 2026-10-07: os quatro aprovados, ver §4 e DEC-004.** Aprovar, ajustar ou rejeitar cada candidato a invariante de §4 (C-1 schemas oficiais intocados; C-2 default homologação; C-3 certificados e senhas fora do git; C-4 `Id` com 45 caracteres). Para C-2: basta o default, ou `producao` deve exigir uma confirmação explícita extra (ou ser recusado nesta fase, dado DEC-002)? | T-001, todas |
 | Q-02 | O que fica congelado em §5: `schemas/1.01`? também `schemas/1.00` (não usado), ou removê-lo? As pastas vazias `schemas/Componente_Schemas` e `schemas/Componente_recepcao` (não rastreadas) têm algum uso? | T-001 |
 | Q-03 | Certificado: `certs/lika-2026.pfx` já existe e o `.env` tem senha, mas o contexto dizia que ainda não há A1. É o certificado do cliente? Há autorização do titular para uso em homologação? Onde a DPS de teste pode ser emitida (CNPJ do titular)? Como tratar dados reais em `out/` e em logs? | T-004, T-007 |
 | Q-04 | **Respondida em 2026-10-07: (a), ver DEC-003.** T-001, abordagem: (a) cópia gerada `schemas/1.01-local`, ignorada no git, com script e teste de diferença mínima (seu plano; recomendo, restringindo a remoção às âncoras de início/fim); (b) corrigir em memória ao carregar o esquema, sem arquivo derivado. Em (a), `scripts/preparar_xsd.py` (não rastreado) entra como base? E `.gitignore` ganha `schemas/*-local/`? | T-001 |
