@@ -150,7 +150,7 @@ Copy-Item .env.example .env
 | – | Lint com avisos como erro | inexistente | proposta em T-003 |
 | – | Instalação travada / build | inexistente | proposta em T-002 |
 
-### Baseline (2026-10-07, commit `7709aee`, Python 3.11.9, lxml 6.1.3)
+### Baseline (2026-10-07, commit `4abfc2c`, Python 3.11.9, lxml 6.1.3)
 
 **G-1: passa, mas esconde a falha.** `5 passed, 1 skipped`. O teste pulado é `test_xml_valido_contra_xsd_oficial`: ele procura `DPS_v*.xsd` em `schemas/`, e os arquivos estão em `schemas/1.01/`, então a condição de `skipif` é sempre verdadeira.
 

@@ -18,7 +18,7 @@ Fatos externos checados e código copiado. "XSD local" significa os arquivos em 
 | 2026-10-07 | `nDPS` | até 15 dígitos, padrão `[1-9]{1}[0-9]{0,14}` | XSD local v1.01 | `tiposSimples_v1.01.xsd`, `TSNumDPS` |
 | 2026-10-07 | Início de `infDPS` (sequência) | `tpAmb`, `dhEmi`, `verAplic`, `serie`, `nDPS`, `dCompet`, `tpEmit`, `cMotivoEmisTI`?, `chNFSeRej`?, `cLocEmi`, … | XSD local v1.01 | `tiposComplexos_v1.01.xsd`, `TCInfDPS` |
 
-### SHA-256 dos XSDs em `schemas/1.01` (primeiros 16 hex, 2026-10-07, commit `7709aee`)
+### SHA-256 dos XSDs em `schemas/1.01` (primeiros 16 hex, 2026-10-07, commit `4abfc2c`)
 
 | Arquivo | SHA-256 (prefixo) |
 |---|---|
