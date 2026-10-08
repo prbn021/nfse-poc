@@ -1,4 +1,4 @@
-"""Falha se o git rastrear .env ou certificado (.pfx, .p12, .pem). Gate G-4, INV-03."""
+"""Falha se o git rastrear .env, certificado (.pfx, .p12, .pem) ou arquivo de docs/referencia fora de gov-docs. Gate G-4, INV-03."""
 import subprocess
 import sys
 from pathlib import Path
@@ -14,11 +14,11 @@ def main() -> int:
     rastreados = [c for c in saida.decode("utf-8").split("\0") if c]
     achados = proibidos(rastreados)
     if achados:
-        print("[X] Segredo rastreado pelo git (INV-03):")
+        print("[X] Arquivo que não pode ser versionado (INV-03, T-017):")
         for a in achados:
             print("   -", a)
         return 1
-    print(f"[OK] Nenhum .env ou certificado entre os {len(rastreados)} arquivos rastreados")
+    print(f"[OK] Nenhum .env, certificado ou referência privada entre os {len(rastreados)} arquivos rastreados")
     return 0
 
 

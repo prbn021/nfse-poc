@@ -74,11 +74,11 @@ scripts/gerar_dps.py ──> src/config.py  (lê .env via python-dotenv)
         └──────────────> src/xsd.py     (cópia local dos XSDs sem âncoras)
 scripts/preparar_xsd.py ─> src/config.py, src/xsd.py
 scripts/checar_segredos.py ─> src/segredos.py  (lê `git ls-files`)
-tests/ ────────────────> src/dps.py, src/xsd.py, src/config.py, src/segredos.py
+tests/ ────────────────> src/dps.py, src/xsd.py, src/config.py, src/segredos.py, docs/referencia/gov-docs (manifesto)
 ```
 
 - `src/config.py`: `Config` imutável; `NFSE_AMBIENTE` tem default `homologacao` e `producao` levanta `ValueError` (INV-02); `tp_amb` 1=produção, 2=homologação.
-- `src/segredos.py`: `proibidos` aponta, numa lista de caminhos, os que são `.env` ou certificado (`.pfx`, `.p12`, `.pem`). `scripts/checar_segredos.py` aplica isso a `git ls-files` (G-4, INV-03).
+- `src/segredos.py`: `proibidos` aponta, numa lista de caminhos, os que são `.env`, certificado (`.pfx`, `.p12`, `.pem`) ou arquivo de `docs/referencia/` fora de `gov-docs/`. `scripts/checar_segredos.py` aplica isso a `git ls-files` (G-4, INV-03, DEC-026).
 - `src/dps.py`: `Prestador`, `Tomador`, `Servico`, `Valores`, `Dps`; `gerar_id`; `para_xml` (sem assinatura); `localizar_xsd_dps`; `validar_xml`.
 - `src/xsd.py`: `remover_ancoras`, `dir_local`, `preparar_copia_local`. Gera `schemas/<versão>-local/` (ignorada no git) a partir dos oficiais, tirando só `^` inicial e `$` final dos `xs:pattern`; recusa escrever na pasta de origem (DEC-003).
 - `scripts/preparar_xsd.py`: gera a cópia local sob demanda. `scripts/gerar_dps.py` a regenera a cada execução e valida contra ela.
@@ -113,6 +113,7 @@ Decididas pelo humano em 2026-10-07 (DEC-005).
 Código e dados frozen (nunca editados):
 
 - `schemas/1.01/` (INV-01), conferido por G-3.
+- `docs/referencia/gov-docs/` (DEC-021, DEC-026): os 8 anexos e os 6 manuais oficiais. Conferido por `tests/test_gov_docs.py`, em G-1, contra o manifesto `SHA256SUMS` da pasta, e por G-3. Uma versão nova de um documento entra como arquivo novo, com o manifesto atualizado e uma DEC. `LEIAME.md` e `SHA256SUMS` são nossos e não são frozen.
 
 Interfaces frozen (mudam só com nova versão, dados de teste regenerados e nova DEC):
 
@@ -164,6 +165,7 @@ Todas as checagens "no XSD" valem para os arquivos locais, e dependem do item de
 ## §7 Security and secrets
 
 - Segredos vêm de `.env` (ignorado no git) via `python-dotenv`: `NFSE_CERT_PATH`, `NFSE_CERT_PASSWORD`.
+- `docs/referencia/` guarda arquivos com dados reais (notas de clientes) e é ignorada no git, exceto `gov-docs/`, que só tem documentação oficial. G-4 falha se algo dali fora de `gov-docs/` for rastreado (T-017).
 - Ambientes: `homologacao` (default; "produção restrita") e `producao`. `carregar_config()` recusa `producao` com `ValueError` enquanto durar a PoC (INV-02, T-008).
 - Nenhum segredo encontrado no histórico: `git ls-files` não contém `.env`, `.pfx`, `.p12` nem `.pem`.
 - **Observação**: existe `certs/lika-2026.pfx` (8.719 bytes, ignorado no git) e o `.env` local tem `NFSE_CERT_PATH` apontando para ele e `NFSE_CERT_PASSWORD` preenchida. O contexto da conversa dizia que ainda não há certificado A1. Não abri o arquivo nem li a senha. O humano confirmou em 2026-10-07 que é o certificado do cliente (Q-03).
@@ -196,8 +198,8 @@ Para mudar uma dependência: editar o `.in`, gerar os dois locks de novo, nesta 
 |---|---|---|---|
 | G-1 | Testes | `.\.venv\Scripts\python.exe -m pytest -q -rs` | Toda task |
 | G-2 | Verificação do projeto: gerar e validar a DPS | `.\.venv\Scripts\python.exe scripts\gerar_dps.py` (sucesso = código de saída 0) | Toda task |
-| G-3 | XSDs oficiais intocados | `git diff --exit-code main -- schemas/1.01` | Toda task |
-| G-4 | Nenhum segredo rastreado (`.env`, `*.pfx`, `*.p12`, `*.pem`) | `.\.venv\Scripts\python.exe scripts\checar_segredos.py` (sucesso = código de saída 0) | Toda task |
+| G-3 | Áreas frozen intocadas (XSDs e documentação oficial) | `git diff --exit-code main -- schemas/1.01 docs/referencia/gov-docs` | Toda task |
+| G-4 | Nenhum segredo ou referência privada rastreados (`.env`, `*.pfx`, `*.p12`, `*.pem`, e `docs/referencia/` fora de `gov-docs/`) | `.\.venv\Scripts\python.exe scripts\checar_segredos.py` (sucesso = código de saída 0) | Toda task |
 | – | Formatação | inexistente | ruff, a implementar em T-003 (DEC-012) |
 | – | Lint com avisos como erro | inexistente | ruff, a implementar em T-003 (DEC-012) |
 | G-5 | Instalação travada | `.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt` (precisa de rede) | Ao preparar o ambiente e em toda task que mude um `requirements*`. Nas demais, `tests/test_lock.py` (em G-1) confere que o ambiente bate com os locks |
@@ -254,6 +256,12 @@ Reexecutados antes e depois de atualizar o spec e as fontes com a documentação
 
 - Só `docs/SPEC.md`, `docs/SOURCES.md` e `schemas/LEIAME.md` mudaram. G-1: `52 passed`, nenhum pulado. G-2: código de saída 0. G-3: sem diferenças. G-4: código de saída 0.
 
+### Depois de T-017 (2026-10-08, branch `t-017-version-official-docs`)
+
+- G-1: `64 passed`, nenhum pulado (12 testes novos: 8 casos em `tests/test_segredos.py` e 4 em `tests/test_gov_docs.py`). G-2: código de saída 0. G-4: código de saída 0, com 54 arquivos rastreados.
+- G-3 com o comando novo acusa, nesta branch, os 16 arquivos acrescentados em `docs/referencia/gov-docs/`, que é o objetivo da task; depois do merge volta a passar. Para `schemas/1.01`, sem diferenças.
+- G-4 testado à mão: com uma cópia da nota de exemplo adicionada ao índice do git, sai com código 1 e aponta o arquivo; desfeito em seguida.
+
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
 1. **Norma.** XML Schema Part 2, Apêndice F: as expressões regulares são ancoradas implicitamente no início e no fim; `^` e `$` não são metacaracteres (`^` só tem papel especial dentro de `[...]`). Num `xs:pattern`, portanto, são caracteres literais.
@@ -290,11 +298,11 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006, T-010, T-015 | §3, §6, §7 | todo | A definir; inclui decodificar a NFS-e de retorno (DEC-016); httpx (DEC-015); o ambiente vem só de `Config` (DEC-010); exige `[VERIFY]` de URLs e rotas; só produção restrita |
 | T-011 | Termos do `CLAUDE.md` em inglês e regras básicas do projeto | T-001 | CLAUDE.md, §0, §9, §10 | done | (1) títulos de seção, colunas e termos do spec em inglês, conforme DEC-006; (2) §0 com as regras de idioma, de `Approved`/`done` e de PR e merge; (3) DEC-006 a DEC-009 registradas; (4) nenhum arquivo fora de `docs/` alterado; (5) G-1 a G-3 passam |
 | T-012 | README: como preparar, rodar e testar | T-002, T-009 | §2, §8 | done | (1) o `README.md` traz os comandos de preparação (instalação travada, G-5), execução e teste, iguais aos de §8; (2) cobre os erros que o humano encontrou em 2026-10-08 (`No module named pytest` por instalar só o `requirements.txt`; caminho de script incompleto); (3) nenhum claim além dos de §2; (4) o brainstorming anterior é mantido, marcado como histórico; (5) só `README.md` e `docs/` mudam; (6) G-1 a G-4 passam |
-| T-013 | Responder as open questions | T-012 | §11 | review | (1) cada resposta do humano de 2026-10-08 transcrita em §11 e registrada como DEC; (2) as seções afetadas do spec (§1, §3, §4, §6, §7, §8, §9) coerentes com as respostas; (3) fatos novos checados em `docs/SOURCES.md`; (4) `schemas/LEIAME.md` cita a licença e o nome do pacote de origem; (5) nenhum código alterado; (6) G-1 a G-4 passam |
+| T-013 | Responder as open questions | T-012 | §11 | done | (1) cada resposta do humano de 2026-10-08 transcrita em §11 e registrada como DEC; (2) as seções afetadas do spec (§1, §3, §4, §6, §7, §8, §9) coerentes com as respostas; (3) fatos novos checados em `docs/SOURCES.md`; (4) `schemas/LEIAME.md` cita a licença e o nome do pacote de origem; (5) nenhum código alterado; (6) G-1 a G-4 passam |
 | T-014 | Restringir `serie` a 1–49999 no modelo | T-001 | §4, §6 | todo | (1) `Dps` recusa `serie` fora de 1–49999 com erro claro que cita a faixa do aplicativo próprio; (2) testes nos limites: 1 e 49999 aceitos, 0 e 50000 recusados; (3) o XML do exemplo continua válido (DEC-019) |
 | T-015 | Teste de conexão mTLS em produção restrita | T-004 | §6, §7 | todo | (1) `[VERIFY]` da URL base da SEFIN em produção restrita fechado antes de qualquer chamada; (2) um script manual abre uma conexão mTLS com o certificado do emitente indicado e faz uma consulta que não emite nem altera nada (qual rota: a confirmar com o humano na task); (3) o resultado (status HTTP, erro de TLS ou sucesso) é registrado no spec; (4) nada de senha, chave ou conteúdo do certificado na saída (INV-05); (5) recusa qualquer ambiente que não seja produção restrita (INV-02); (6) httpx com versão exata e lock; (7) sem teste automatizado que dependa de rede ou do certificado real (DEC-014) |
 | T-016 | Teste das boundaries de §3 | T-001 | §3 | todo | (1) um teste em G-1 lê os imports de `src/` e falha se `src/dps.py` importar módulo de rede ou de certificado, se outro módulo que não `src/client.py` importar biblioteca de rede, ou se `src/` importar de `scripts/`; (2) teste negativo com um módulo de exemplo que viola cada regra; (3) passa no código atual (DEC-017) |
-| T-017 | Versionar a documentação oficial em `docs/referencia/gov-docs/` | T-013 | §5, §7, §8 | todo | (1) os 8 anexos e os 6 manuais oficiais ficam em `docs/referencia/gov-docs/`, rastreados e sem alteração, com o SHA-256 de cada um em `docs/SOURCES.md`; (2) o `.gitignore` continua ignorando o resto de `docs/referencia/`; (3) a nota fiscal do cliente e qualquer arquivo com dado real continuam fora do git, e um gate falha se algo de `docs/referencia/` fora de `gov-docs/` estiver rastreado; (4) `LEIAME.md` na pasta com a página de origem, a data e a licença; (5) a pasta entra em §5 como frozen, conferida por gate; (6) os caminhos citados em `docs/SOURCES.md` batem com os arquivos; (7) G-1 a G-4 passam (DEC-021) |
+| T-017 | Versionar a documentação oficial em `docs/referencia/gov-docs/` | T-013 | §5, §7, §8 | review | (1) os 8 anexos e os 6 manuais oficiais ficam em `docs/referencia/gov-docs/`, rastreados e sem alteração, com o SHA-256 de cada um em `docs/SOURCES.md`; (2) o `.gitignore` continua ignorando o resto de `docs/referencia/`; (3) a nota fiscal do cliente e qualquer arquivo com dado real continuam fora do git, e um gate falha se algo de `docs/referencia/` fora de `gov-docs/` estiver rastreado; (4) `LEIAME.md` na pasta com a página de origem, a data e a licença; (5) a pasta entra em §5 como frozen, conferida por gate; (6) os caminhos citados em `docs/SOURCES.md` batem com os arquivos; (7) G-1 a G-4 passam (DEC-021) |
 | T-018 | Campos opcionais da DPS usados nas notas atuais | T-010 | §5, §6 | todo | (1) o modelo aceita, todos opcionais: `cTribMun` (3 dígitos) no serviço; `fone` e `email` no prestador; grupo `tribFed/piscofins` com `CST` (obrigatório dentro do grupo) e `tpRetPisCofins`; (2) sem esses campos o XML sai igual ao de hoje; (3) cada um na posição do XSD, e os XMLs válidos contra a cópia local; (4) testes negativos: `cTribMun` fora de 3 dígitos, `email` sem estrutura de e-mail (E0148), `CST` e `tpRetPisCofins` fora das tabelas; (5) o exemplo de `scripts/gerar_dps.py` passa a emitir os quatro, com dados fictícios; (6) fora do escopo: base de cálculo, alíquotas e valores de PIS/COFINS e as demais retenções federais (DEC-023) |
 | T-019 | Configuração por emitente (lista de certificados) | T-001 | §3, §4, §7 | todo | (1) o `.env` fica só com o que é do ambiente (`NFSE_AMBIENTE`, URLs, `NFSE_XSD_DIR`); `NFSE_CERT_PATH` e `NFSE_CERT_PASSWORD` saem de `Config`; (2) cada emitente tem um arquivo local, numa pasta ignorada no git, com caminho do certificado, senha e dados fixos do emitente (CNPJ, município, inscrição municipal, regime); (3) um arquivo de exemplo com dados fictícios é versionado, e os scripts recebem qual emitente usar; (4) emitente inexistente ou arquivo incompleto gera erro claro; (5) a senha não aparece em `repr` nem em mensagem de erro (INV-05); (6) G-4 passa a recusar arquivos de emitente rastreados, exceto o de exemplo; (7) só biblioteca padrão para ler o arquivo; (8) o que muda a cada nota (tomador, serviço, valores, percentual de `pTotTribSN`) não fica no arquivo do emitente (DEC-024) |
 | T-020 | Construção civil: grupo de obra na DPS | T-018 | §5, §6 | todo | A definir depois de ler no Anexo I as regras do grupo de obra. Existe na carteira (DEC-024) |
@@ -308,20 +316,20 @@ Estado ao fim da sessão de 2026-10-08. Para retomar com o agente: pedir que lei
 
 **Onde o trabalho parou**
 
-- `main` está em `d84d291` e contém T-000, T-001, T-002, T-008, T-009, T-011 e T-012, todas `done`. T-012 entrou pela PR #6 e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
-- T-013 (responder as open questions) está em `review` na branch `t-013-answer-open-questions`. Falta o humano abrir a PR, mesclar com squash e pedir o `done`:
-  - link: `https://github.com/prbn021/nfse-poc/compare/main...t-013-answer-open-questions?expand=1`
-  - título: `T-013: answer the open questions and record the multi-issuer scope`
+- `main` está em `422aec0` e contém T-000, T-001, T-002, T-008, T-009, T-011, T-012 e T-013, todas `done`. T-013 entrou pela PR #7 e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
+- T-017 (versionar a documentação oficial) está em `review` na branch `t-017-version-official-docs`. Falta o humano abrir a PR, mesclar com squash e pedir o `done`:
+  - link: `https://github.com/prbn021/nfse-poc/compare/main...t-017-version-official-docs?expand=1`
+  - título: `T-017: version the official documentation under docs/referencia/gov-docs`
 
 **Para preparar uma máquina**
 
 1. Seguir "Preparar o ambiente" do `README.md` (instalação travada, G-5) e rodar G-1 a G-4.
-2. Não viajam pelo git e precisam ser levados à mão, se forem necessários: `certs/*.pfx` e a senha, `docs/referencia/` (documentação oficial e a nota de exemplo, que tem dados reais), chave SSH, `git config user.name`/`user.email`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
+2. Não viajam pelo git e precisam ser levados à mão, se forem necessários: `certs/*.pfx` e a senha, o que está em `docs/referencia/` fora de `gov-docs/` (a nota de exemplo, que tem dados reais), chave SSH, `git config user.name`/`user.email`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
 3. Se a máquina não tiver o `gh`, as PRs são abertas pela interface do GitHub, com link, título e descrição entregues pelo agente.
 
 **Próxima task e o que está pendente para ela**
 
-- Ordem das próximas (DEC-020 e DEC-025, confirmadas pelo humano em 2026-10-08): T-017, T-003, T-016, T-019, T-004, T-015, T-010, T-014, T-018, T-006, T-005, T-007, e depois T-020 a T-023. A ideia: depois das duas tasks de preparação, ir direto ao certificado e ao teste de conexão mTLS, que é o maior risco e pode depender de terceiros; o trabalho no modelo (M1) vem em seguida.
+- Ordem das próximas (DEC-020 e DEC-025, confirmadas pelo humano em 2026-10-08): T-003, T-016, T-019, T-004, T-015, T-010, T-014, T-018, T-006, T-005, T-007, e depois T-020 a T-023. A ideia: depois das duas tasks de preparação, ir direto ao certificado e ao teste de conexão mTLS, que é o maior risco e pode depender de terceiros; o trabalho no modelo (M1) vem em seguida.
 - **T-003** está liberada: ruff e CI em Windows aprovados (DEC-012). Ela começa apresentando as regras do ruff, antes de instalar.
 - **T-010** está liberada (DEC-013, DEC-022, DEC-024): só ME/EPP com tudo pelo Simples; Não Optante, MEI e ISS por fora são recusados pelo modelo.
 - **T-020 a T-023** têm acceptance criteria "a definir": dependem de ler as regras do Anexo I para cada caso.
@@ -353,6 +361,7 @@ Registro das atualizações anteriores, em ordem. O estado atual é o da seção
 - Não viajam pelo git e precisam ser recriados na outra máquina: `.venv`, `.env` (copiar de `.env.example`), `certs/*.pfx` e a senha, chave SSH, `git config user.name`/`user.email`, `docs/referencia/`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
 - 2026-10-08: T-009 entrou em `main` pela PR #5 (`88af46e`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). T-012 criada a pedido do humano, depois de ele instalar só o `requirements.txt` e ficar sem o pytest; feita em branch própria depois do merge da T-009, por escolha dele.
 - 2026-10-08: T-012 entrou em `main` pela PR #6 (`d84d291`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). T-013 criada a pedido do humano para responder as open questions; respondidas nesta data: Q-03, Q-05, Q-06, Q-07, Q-08, Q-09, Q-10, Q-12 e Q-13, mais os acceptance criteria da T-006. Tasks novas: T-014, T-015, T-016, T-017 (versionar a documentação oficial, DEC-021) e T-018 (campos opcionais usados pelo cliente, DEC-023). Open questions novas: Q-14, Q-15 e Q-16 (respondidas na mesma data), Q-17 e Q-18. O humano informou que o produto atende várias empresas e trouxe respostas dos contadores sobre o perfil da carteira (DEC-024); tasks novas T-019 a T-023. O humano autorizou o agente a ler a nota fiscal antiga do cliente (PDF e XML, em `docs/referencia/`, fora do git); nenhum dado dela foi escrito no repositório.
+- 2026-10-08: T-013 entrou em `main` pela PR #7 (`422aec0`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). T-017 em `review` na branch `t-017-version-official-docs`. Próxima pela ordem: T-003.
 
 ## §10 Decision log
 
@@ -505,6 +514,12 @@ Context: a DEC-020 foi confirmada antes de existirem T-019 a T-023.
 Decision: proposta pelo agente e confirmada pelo humano na conversa de 2026-10-08: T-019 entra antes da T-004, porque a T-004 já deve receber o certificado por emitente; T-020 a T-023 ficam depois da T-007, porque a primeira transmissão usa o caso simples e prova o caminho inteiro antes de o modelo crescer. Ordem completa: T-017, T-003, T-016, T-019, T-004, T-015, T-010, T-014, T-018, T-006, T-005, T-007, e depois T-020 a T-023.
 Alternatives: ampliar o modelo (T-020 a T-023) antes da primeira transmissão (rejeitado: mais código sem saber se o servidor aceita o caso simples).
 Consequences: §9. O resto da DEC-020 não muda.
+
+### DEC-026: Manifesto SHA-256 para a documentação oficial; regra de referência privada no G-4 (2026-10-08, T-017)
+Context: a T-017 pede a pasta `docs/referencia/gov-docs/` como frozen, conferida por gate, e um gate que impeça rastrear o resto de `docs/referencia/`. G-3 compara com `main` e, na branch que acrescenta os arquivos, acusa os próprios acréscimos.
+Decision: do agente (escolhas de implementação): (a) manifesto `SHA256SUMS` na pasta e `tests/test_gov_docs.py`, em G-1, que falha se um arquivo mudar, sumir ou aparecer sem estar no manifesto; G-3 também passa a listar a pasta; (b) a regra de referência privada entra em `src/segredos.py`, na mesma função `proibidos` que o G-4 já usa, em vez de um script novo; (c) `.gitignore` troca `docs/referencia/` por `docs/referencia/*` mais a exceção `!docs/referencia/gov-docs/`, porque o git não reinclui nada dentro de uma pasta ignorada inteira; (d) `.gitattributes` marca `*.pdf` e `*.xlsx` como binários, para a conversão de fim de linha nunca alterar os arquivos e quebrar o manifesto.
+Alternatives: só G-3 (rejeitado: não aponta qual arquivo mudou nem pega um arquivo estranho na pasta, e falha na própria branch da task); um gate G-6 separado para a referência privada (rejeitado: mesma lógica e mesma entrada do G-4).
+Consequences: §3, §5, §7, §8. O nome `segredos` passa a cobrir também material com dados reais, que não é segredo no sentido de INV-03. Trocar um documento oficial exige mudar o manifesto no mesmo commit, o que fica visível na revisão. Os arquivos não foram comparados com os que a página oficial publica hoje: `[VERIFY: procedência dos arquivos de gov-docs]`, como o dos XSDs. Antes de versionar, os metadados foram conferidos: autores e datas de modificação são anteriores à entrega ao projeto, e os comentários embutidos no Anexo I são notas técnicas da própria planilha.
 
 ## §11 Open questions
 
