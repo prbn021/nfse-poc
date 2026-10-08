@@ -1,14 +1,13 @@
 """O ambiente em uso precisa bater com os pins do repositório (T-002)."""
+
 import platform
 import re
 from importlib import metadata
 
+import pytest
 from packaging.requirements import Requirement
 
 from src.config import RAIZ
-
-
-import pytest
 
 # (entrada com as dependências diretas, lock gerado pelo pip-compile)
 PARES = [("requirements.in", "requirements.txt"), ("requirements-dev.in", "requirements-dev.txt")]

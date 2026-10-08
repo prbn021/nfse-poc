@@ -4,6 +4,7 @@ O XSD oficial v1.01 traz um padrão com ^ e $ (TSSerieDPS). Em XML Schema as exp
 já são ancoradas e esses dois caracteres são literais, então o lxml/libxml2 rejeita
 qualquer série. Os oficiais nunca são editados: geramos uma cópia sem as âncoras.
 """
+
 from __future__ import annotations
 
 import re
@@ -22,7 +23,10 @@ def _sem_ancoras(m: re.Match[bytes]) -> bytes:
 
 
 def remover_ancoras(xsd: bytes) -> bytes:
-    """Tira ^ do início e $ do fim dos xs:pattern. Em bytes, para não mexer em codificação nem em quebras de linha."""
+    """Tira ^ do início e $ do fim dos xs:pattern.
+
+    Em bytes, para não mexer em codificação nem em quebras de linha.
+    """
     return _PATTERN.sub(_sem_ancoras, xsd)
 
 

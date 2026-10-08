@@ -25,29 +25,36 @@ def _com_serie(serie: str) -> bytes:
     return etree.tostring(raiz)
 
 
-@pytest.mark.parametrize("antes, depois", [
-    (rb'<xs:pattern value="^0{0,4}\d{1,5}$"/>', rb'<xs:pattern value="0{0,4}\d{1,5}"/>'),
-    (rb'<xsd:pattern  value="^abc"/>', rb'<xsd:pattern  value="abc"/>'),
-    (rb'<xs:pattern value="abc$"/>', rb'<xs:pattern value="abc"/>'),
-])
+@pytest.mark.parametrize(
+    "antes, depois",
+    [
+        (rb'<xs:pattern value="^0{0,4}\d{1,5}$"/>', rb'<xs:pattern value="0{0,4}\d{1,5}"/>'),
+        (rb'<xsd:pattern  value="^abc"/>', rb'<xsd:pattern  value="abc"/>'),
+        (rb'<xs:pattern value="abc$"/>', rb'<xs:pattern value="abc"/>'),
+    ],
+)
 def test_remover_ancoras_tira_so_o_inicio_e_o_fim(antes, depois):
     assert remover_ancoras(antes) == depois
 
 
-@pytest.mark.parametrize("intacto", [
-    rb'<xs:pattern value="[^0-9]{3}"/>',          # ^ de negação dentro de [...]
-    rb'<xs:pattern value="a^b$c"/>',              # ^ e $ no meio
-    rb'<xs:pattern value="R\$"/>',                # $ escapado
-    rb'<xs:enumeration value="^1$"/>',            # não é pattern
-    rb'<xs:pattern value="DPS[0-9]{42}"/>',
-])
+@pytest.mark.parametrize(
+    "intacto",
+    [
+        rb'<xs:pattern value="[^0-9]{3}"/>',  # ^ de negação dentro de [...]
+        rb'<xs:pattern value="a^b$c"/>',  # ^ e $ no meio
+        rb'<xs:pattern value="R\$"/>',  # $ escapado
+        rb'<xs:enumeration value="^1$"/>',  # não é pattern
+        rb'<xs:pattern value="DPS[0-9]{42}"/>',
+    ],
+)
 def test_remover_ancoras_nao_toca_no_resto(intacto):
     assert remover_ancoras(intacto) == intacto
 
 
 def test_so_a_versao_1_01_dos_xsds_esta_no_repositorio():
-    versoes = sorted(p.name for p in (RAIZ / "schemas").iterdir()
-                     if p.is_dir() and not p.name.endswith("-local"))
+    versoes = sorted(
+        p.name for p in (RAIZ / "schemas").iterdir() if p.is_dir() and not p.name.endswith("-local")
+    )
     assert versoes == ["1.01"]
 
 
@@ -69,7 +76,7 @@ def test_copia_difere_dos_oficiais_so_nas_ancoras(copia):
         a = (OFICIAL / nome).read_bytes().split(b"\n")
         b = (copia / nome).read_bytes().split(b"\n")
         assert len(a) == len(b), nome
-        for n, (la, lb) in enumerate(zip(a, b), start=1):
+        for n, (la, lb) in enumerate(zip(a, b, strict=True), start=1):
             if la != lb:
                 diferencas.add((nome, n))
                 assert b"pattern" in la

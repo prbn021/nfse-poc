@@ -1,4 +1,5 @@
-"""Gera a cópia local dos XSDs oficiais (schemas/1.01 -> schemas/1.01-local), sem ^ e $ nos padrões."""
+"""Gera a cópia local dos XSDs oficiais (schemas/1.01-local), sem ^ e $ nos padrões."""
+
 import sys
 from pathlib import Path
 

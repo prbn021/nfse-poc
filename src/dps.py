@@ -4,6 +4,7 @@ ATENÇÃO: a estrutura abaixo segue o layout da DPS v1.x como eu o conheço, mas
 oficial é a fonte de verdade. Rode `scripts/gerar_dps.py`: se a validação reclamar
 de ordem/obrigatoriedade de elementos, ajuste `para_xml()` conforme o XSD.
 """
+
 from __future__ import annotations
 
 import re
@@ -30,12 +31,13 @@ def _dinheiro(valor: Decimal) -> str:
 
 # ----------------------------------------------------------------- modelo
 
+
 @dataclass(frozen=True)
 class Prestador:
     cnpj: str
     inscricao_municipal: str | None
-    op_simp_nac: int          # 1=Não optante, 2=MEI, 3=ME/EPP (conferir tabela no manual)
-    reg_esp_trib: int = 0     # 0=Nenhum (conferir tabela no manual)
+    op_simp_nac: int  # 1=Não optante, 2=MEI, 3=ME/EPP (conferir tabela no manual)
+    reg_esp_trib: int = 0  # 0=Nenhum (conferir tabela no manual)
 
     def __post_init__(self):
         _so_digitos(self.cnpj, 14, "prestador.cnpj")
@@ -58,8 +60,8 @@ class Tomador:
 
 @dataclass(frozen=True)
 class Servico:
-    c_loc_prestacao: str      # código IBGE do município (7 dígitos)
-    c_trib_nac: str           # código de tributação nacional (6 dígitos)
+    c_loc_prestacao: str  # código IBGE do município (7 dígitos)
+    c_trib_nac: str  # código de tributação nacional (6 dígitos)
     descricao: str
 
     def __post_init__(self):
@@ -72,8 +74,8 @@ class Servico:
 @dataclass(frozen=True)
 class Valores:
     v_serv: Decimal
-    trib_issqn: int = 1       # 1=Operação tributável (conferir tabela)
-    tp_ret_issqn: int = 1     # 1=Sem retenção (conferir tabela)
+    trib_issqn: int = 1  # 1=Operação tributável (conferir tabela)
+    tp_ret_issqn: int = 1  # 1=Sem retenção (conferir tabela)
     p_aliq: Decimal | None = None  # só se o município/regime exigir
 
     def __post_init__(self):
@@ -83,18 +85,18 @@ class Valores:
 
 @dataclass(frozen=True)
 class Dps:
-    tp_amb: int               # 1=produção, 2=homologação
-    c_loc_emi: str            # IBGE do município emissor (7 dígitos)
+    tp_amb: int  # 1=produção, 2=homologação
+    c_loc_emi: str  # IBGE do município emissor (7 dígitos)
     serie: int
     n_dps: int
     d_compet: date
-    dh_emi: datetime          # com fuso horário (tzinfo obrigatório)
+    dh_emi: datetime  # com fuso horário (tzinfo obrigatório)
     prestador: Prestador
     tomador: Tomador
     servico: Servico
     valores: Valores
     ver_aplic: str = "nfse-poc-0.1"
-    tp_emit: int = 1          # 1=Prestador
+    tp_emit: int = 1  # 1=Prestador
 
     def __post_init__(self):
         if self.tp_amb not in (1, 2):
@@ -113,13 +115,17 @@ class Dps:
 
 
 def gerar_id(c_loc_emi: str, cnpj: str, serie: int, n_dps: int) -> str:
-    """Id da infDPS: 'DPS' + cLocEmi(7) + tipoInscrição(1; 2=CNPJ) + CNPJ(14) + série(5) + nDPS(15) = 45."""
+    """Id da infDPS, 45 posições (INV-04).
+
+    'DPS' + cLocEmi(7) + tipoInscrição(1; 2=CNPJ) + CNPJ(14) + série(5) + nDPS(15).
+    """
     id_ = f"DPS{c_loc_emi}2{cnpj}{serie:05d}{n_dps:015d}"
-    assert len(id_) == 45, id_
+    assert len(id_) == 45, id_  # noqa: S101 (rede de segurança de INV-04)
     return id_
 
 
 # -------------------------------------------------------------------- XML
+
 
 def _sub(pai, nome: str, texto: str | None = None):
     el = etree.SubElement(pai, f"{{{NS}}}{nome}")
@@ -181,6 +187,7 @@ def para_xml(dps: Dps) -> bytes:
 
 
 # -------------------------------------------------------------- validação
+
 
 def localizar_xsd_dps(xsd_dir: Path) -> Path | None:
     candidatos = sorted(Path(xsd_dir).glob("DPS_v*.xsd"))

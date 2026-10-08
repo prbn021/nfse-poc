@@ -1,4 +1,5 @@
 """A documentação oficial em docs/referencia/gov-docs é frozen: confere com o manifesto (T-017)."""
+
 import hashlib
 
 from src.config import RAIZ
@@ -27,8 +28,11 @@ def test_manifesto_lista_exatamente_os_arquivos_da_pasta():
 
 
 def test_cada_arquivo_bate_com_o_sha256_do_manifesto():
-    alterados = [nome for nome, sha in _manifesto().items()
-                 if hashlib.sha256((GOV_DOCS / nome).read_bytes()).hexdigest() != sha]
+    alterados = [
+        nome
+        for nome, sha in _manifesto().items()
+        if hashlib.sha256((GOV_DOCS / nome).read_bytes()).hexdigest() != sha
+    ]
     assert alterados == []
 
 

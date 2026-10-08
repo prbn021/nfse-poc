@@ -3,8 +3,14 @@ import pytest
 from src import config
 from src.config import carregar_config
 
-VARIAVEIS = ("NFSE_AMBIENTE", "NFSE_CERT_PATH", "NFSE_CERT_PASSWORD",
-             "NFSE_SEFIN_URL", "NFSE_ADN_URL", "NFSE_XSD_DIR")
+VARIAVEIS = (
+    "NFSE_AMBIENTE",
+    "NFSE_CERT_PATH",
+    "NFSE_CERT_PASSWORD",
+    "NFSE_SEFIN_URL",
+    "NFSE_ADN_URL",
+    "NFSE_XSD_DIR",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +43,7 @@ def test_ambiente_desconhecido_e_recusado(monkeypatch):
 
 def test_env_example_nao_anuncia_producao():
     linhas = (config.RAIZ / ".env.example").read_text(encoding="utf-8").splitlines()
-    ambiente = [l for l in linhas if l.startswith("NFSE_AMBIENTE=")]
+    ambiente = [linha for linha in linhas if linha.startswith("NFSE_AMBIENTE=")]
     assert len(ambiente) == 1
     assert ambiente[0].split("#")[0].strip() == "NFSE_AMBIENTE=homologacao"
     assert "| producao" not in ambiente[0]

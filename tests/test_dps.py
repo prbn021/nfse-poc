@@ -5,8 +5,18 @@ import pytest
 from lxml import etree
 
 from src.config import RAIZ
-from src.dps import (NS, Dps, Prestador, Servico, Tomador, Valores, gerar_id,
-                     localizar_xsd_dps, para_xml, validar_xml)
+from src.dps import (
+    NS,
+    Dps,
+    Prestador,
+    Servico,
+    Tomador,
+    Valores,
+    gerar_id,
+    localizar_xsd_dps,
+    para_xml,
+    validar_xml,
+)
 from src.xsd import preparar_copia_local
 
 BRT = timezone(timedelta(hours=-3))
@@ -14,8 +24,12 @@ BRT = timezone(timedelta(hours=-3))
 
 def _dps(**over) -> Dps:
     base = dict(
-        tp_amb=2, c_loc_emi="3304557", serie=1, n_dps=42,
-        d_compet=date(2026, 10, 7), dh_emi=datetime(2026, 10, 7, 10, 0, 0, tzinfo=BRT),
+        tp_amb=2,
+        c_loc_emi="3304557",
+        serie=1,
+        n_dps=42,
+        d_compet=date(2026, 10, 7),
+        dh_emi=datetime(2026, 10, 7, 10, 0, 0, tzinfo=BRT),
         prestador=Prestador(cnpj="11222333000181", inscricao_municipal="12345", op_simp_nac=3),
         tomador=Tomador(nome="Cliente", cnpj="99888777000161"),
         servico=Servico(c_loc_prestacao="3304557", c_trib_nac="010101", descricao="Serviço"),
