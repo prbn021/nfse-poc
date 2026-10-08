@@ -12,7 +12,7 @@ from pathlib import Path
 _PATTERN = re.compile(rb'(<\w+:pattern\s+value=")([^"]*)(")')
 
 
-def _sem_ancoras(m: re.Match) -> bytes:
+def _sem_ancoras(m: re.Match[bytes]) -> bytes:
     valor = m.group(2)
     if valor.startswith(b"^"):
         valor = valor[1:]
