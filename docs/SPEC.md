@@ -109,12 +109,14 @@ Dados de teste "golden": não existem. `out/` é ignorado no git.
 
 | Item | Valor observado | Fixado? |
 |---|---|---|
-| Python | 3.11.9 (`.venv/pyvenv.cfg`) | Não (sem `.python-version`) |
-| lxml | 6.1.3 (libxml2 2.11.9, compilada e em execução) | Não |
-| python-dotenv | 1.2.4 | Não |
-| pytest | 9.1.1 | Não |
+| Python | 3.11.9 (`.venv/pyvenv.cfg`) | Sim: `.python-version`. Um teste confere `3.11`; o patch não é conferido |
+| lxml | 6.1.3 (libxml2 2.11.9, compilada e em execução) | Sim: `requirements.in`, lock em `requirements.txt` |
+| python-dotenv | 1.2.4 | Sim: `requirements.in`, lock em `requirements.txt` |
+| pytest | 9.1.1 | Sim: `requirements-dev.in`, lock em `requirements-dev.txt` |
+| pip-tools | 7.6.2 | Sim: `requirements-dev.in`, lock em `requirements-dev.txt` |
 
-- `requirements.txt` lista `lxml`, `python-dotenv`, `pytest` sem versões e não há lockfile: o não-negociável 10 (builds reproduzíveis) não é atendível hoje. Ver T-002.
+- Dependências diretas com versão exata em `requirements.in` (execução) e `requirements-dev.in` (testes e pip-tools). Os locks `requirements.txt` e `requirements-dev.txt` são gerados pelo `pip-compile`, com versão exata e hashes SHA-256 de todas as dependências, inclusive `pip` e `setuptools`. Não são editados à mão (T-002, DEC-011).
+- Os locks foram gerados no Windows com Python 3.11 e resolvem as dependências para essa plataforma (por exemplo, incluem `colorama`). Outra plataforma ou versão de Python exige gerar de novo.
 - `pyvenv.cfg` registra que a venv foi criada em `C:\Users\preis\rpa\nfse-poc\.venv`, outro caminho. `python.exe -m …` funciona; os lançadores `.exe` em `.venv\Scripts` (ex.: `pytest.exe`) podem estar quebrados `[INFERRED]`. Os gates usam `python -m`.
 - Bibliotecas ainda não escolhidas (README): HTTP/mTLS (httpx ou requests), `cryptography`, assinatura (signxml ou lxml+xmlsec), nfelib `[HUMAN]` (talvez só para bindings da DPS). Adicionar qualquer uma é decisão de task; adicionar framework/serviço é item de "perguntar".
 
@@ -148,12 +150,19 @@ Todas as checagens "no XSD" valem para os arquivos locais, e dependem do item de
 
 Comandos em PowerShell, a partir da raiz. Não há CI, Makefile nem scripts de verificação no repositório; os gates abaixo vêm do que o projeto já executa.
 
-Preparação a partir de um checkout limpo (hoje **não** reproduzível, ver T-002):
+Preparação a partir de um checkout limpo, com instalação travada (G-5):
 
 ```powershell
 py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt
 Copy-Item .env.example .env
+```
+
+Para mudar uma dependência: editar o `.in`, gerar os dois locks de novo, nesta ordem, e reinstalar com o comando acima.
+
+```powershell
+.\.venv\Scripts\python.exe -m piptools compile --generate-hashes --strip-extras --allow-unsafe -o requirements.txt requirements.in
+.\.venv\Scripts\python.exe -m piptools compile --generate-hashes --strip-extras --allow-unsafe -o requirements-dev.txt requirements-dev.in
 ```
 
 | ID | Gate | Command | When |
@@ -164,7 +173,8 @@ Copy-Item .env.example .env
 | G-4 | Nenhum segredo rastreado (`.env`, `*.pfx`, `*.p12`, `*.pem`) | `.\.venv\Scripts\python.exe scripts\checar_segredos.py` (sucesso = código de saída 0) | Toda task |
 | – | Formatação | inexistente | proposta em T-003 |
 | – | Lint com avisos como erro | inexistente | proposta em T-003 |
-| – | Instalação travada / build | inexistente | proposta em T-002 |
+| G-5 | Instalação travada | `.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt` (precisa de rede) | Ao preparar o ambiente e em toda task que mude um `requirements*`. Nas demais, `tests/test_lock.py` (em G-1) confere que o ambiente bate com os locks |
+| – | Build | não se aplica: o projeto não gera pacote nem binário | – |
 
 ### Baseline (2026-10-07, commit `4abfc2c`, Python 3.11.9, lxml 6.1.3)
 
@@ -196,6 +206,13 @@ Reexecutados antes e depois de atualizar o spec e as fontes com a documentação
 - G-3: sem diferenças.
 - G-4 (novo): código de saída 0, nenhum `.env` ou certificado entre os arquivos rastreados.
 
+### Depois de T-002 (2026-10-07, branch `t-002-pin-toolchain-and-deps`)
+
+- G-5 (novo): código de saída 0 no `.venv` do projeto e num clone novo da branch, em diretório temporário, com `py -3.11 -m venv`.
+- No clone novo, sem `.env`: G-1 `51 passed`; G-2 código de saída 0; G-4 código de saída 0. G-3 não foi rodado no clone.
+- No repositório: G-1 `51 passed`, nenhum pulado (7 testes novos em `tests/test_lock.py`); G-2 código 0; G-3 sem diferenças; G-4 código 0.
+- As versões resolvidas pelo lock são as mesmas que já estavam instaladas antes da task; a instalação travada acrescentou ao `.venv` o pip-tools e as dependências dele, e atualizou o `pip` para a versão do lock.
+
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
 1. **Norma.** XML Schema Part 2, Apêndice F: as expressões regulares são ancoradas implicitamente no início e no fim; `^` e `$` não são metacaracteres (`^` só tem papel especial dentro de `[...]`). Num `xs:pattern`, portanto, são caracteres literais.
@@ -219,7 +236,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 |-------|--------|------|-------|--------|------------------------|
 | T-000 | Bootstrap: spec, fontes e baseline | – | CLAUDE.md | done | `docs/SPEC.md` e `docs/SOURCES.md` no branch `t-000-spec`; baseline de G-1 e G-2 registrado; humano escreve `Approved:` em §0 |
 | T-001 | Validação offline da DPS falha no padrão de `serie` | T-000, Q-01, Q-04 | §4, §5, §6, §8 | done | (1) G-2 sai com código 0 e imprime `[OK] Válida`; (2) `test_xml_valido_contra_xsd_oficial` deixa de ser pulado e passa; (3) `git diff main -- schemas/1.00 schemas/1.01` vazio; (4) teste negativo: `serie` inválida (ex.: `abc`, 6 dígitos) continua rejeitada pelo esquema usado na validação; (5) se houver cópia derivada: é regenerável por script, ignorada no git, e um teste garante que ela difere dos oficiais só nas âncoras `^`/`$` de início e fim de `xs:pattern` (hoje, 1 linha); (6) `.env.example` e o default de `NFSE_XSD_DIR` coerentes com o local real dos XSDs |
-| T-002 | Fixar toolchain e dependências | T-000 | §6, §8 | todo | Versão do Python fixada; dependências com versões exatas e lock; instalação travada documentada em §8 e funcionando em checkout limpo. Ferramenta de lock: Q-05 |
+| T-002 | Fixar toolchain e dependências | T-000 | §6, §8 | review | Versão do Python fixada; dependências com versões exatas e lock; instalação travada documentada em §8 e funcionando em checkout limpo. Ferramenta de lock: pip-tools (Q-05, DEC-011) |
 | T-003 | Propor gates de formatação e lint | T-000 | §8 | todo | Proposta apresentada ao humano (ferramenta, regras, custo); nada instalado sem aprovação (Q-05) |
 | T-004 | Certificado A1: carregar PFX (`certificado.py`) | T-001, Q-03 | §7 | blocked (Q-03) | A definir com o humano |
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004, Q-06 | §5, §6 | todo | A definir; exige `[VERIFY]` do perfil de assinatura exigido pelo padrão nacional |
@@ -243,6 +260,7 @@ Estado ao fim da sessão de 2026-10-07, para continuar em outra máquina:
 - Atualização em T-011 (2026-10-07): T-000 e T-001 entraram em `main` pela PR #1, com squash, no commit `65c2e9b`. As branches `t-000-spec` e `t-001-validacao-serie-xsd` ficaram obsoletas. Próxima task pela ordem da DEC-009: T-008. Open questions sem resposta: Q-05 a Q-10, Q-12 e Q-13; parciais: Q-03 e Q-11.
 - T-011 entrou em `main` pela PR #2 (`b9c6e52`) e foi marcada `done` pelo humano na conversa de 2026-10-07 (transcrito pelo agente, DEC-007).
 - T-008 em `review` na branch `t-008-production-lock-and-secrets-gate`. Próxima pela DEC-009: T-002, que depende de Q-05; se Q-05 seguir aberta, T-009.
+- T-008 entrou em `main` pela PR #3 (`a7e58dd`); continua em `review` no quadro até o humano pedir o `done`. T-002 em `review` na branch `t-002-pin-toolchain-and-deps`. Na outra máquina, recriar o `.venv` com a instalação travada de §8. Próxima pela DEC-009: T-009.
 - Não viajam pelo git e precisam ser recriados na outra máquina: `.venv`, `.env` (copiar de `.env.example`), `certs/*.pfx` e a senha, chave SSH, `git config user.name`/`user.email`, `docs/referencia/`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
 
 ## §10 Decision log
@@ -307,6 +325,12 @@ Decision: do agente (escolhas de implementação): a recusa fica em `carregar_co
 Alternatives: um comando `git ls-files` direto em §8 (rejeitado: sintaxe diferente em PowerShell e bash, e sem teste); um hook de pre-commit (rejeitado: seria ferramenta nova, item de "perguntar"); remover `producao` de `TP_AMB` (rejeitado: o mapeamento 1 = produção é um fato do leiaute, e a mensagem de erro específica é mais clara).
 Consequences: §3, §4, §7, §8. Limite: a trava cobre o caminho de configuração. `Dps(tp_amb=1)` ainda pode ser construída por chamada direta, porque o modelo aceita os dois valores do leiaute; nada transmite hoje, e a T-007 deve obter o ambiente só de `Config`. G-4 olha os arquivos rastreados agora, não o histórico de commits.
 
+### DEC-011: Lock de dependências com pip-tools (2026-10-07, T-002)
+Context: `requirements.txt` listava três pacotes sem versão e não havia versão de Python fixada, o que descumpria o não-negociável 10 do `CLAUDE.md`. Q-05 perguntava a ferramenta de lock.
+Decision: do humano, na conversa de 2026-10-07: pip-tools. Escolhas de implementação do agente: `.python-version` com `3.11.9`; dois pares entrada/lock, `requirements.in` → `requirements.txt` (execução) e `requirements-dev.in` → `requirements-dev.txt` (pytest e o próprio pip-tools, restrito por `-c requirements.txt`); versões exatas já nos `.in`, iguais às que estavam instaladas, para a task não mudar comportamento; locks com `--generate-hashes` e `--allow-unsafe`, para `pip` e `setuptools` também terem hash e a instalação com `--require-hashes` funcionar; `tests/test_lock.py` confere em G-1 que os locks têm versão exata e hash e que o ambiente em uso bate com eles.
+Alternatives: uv (rejeitado pelo humano: troca o fluxo de venv e pip); `pip freeze` (rejeitado: sem hashes e sem separar dependências diretas); um único lock para tudo (rejeitado: misturaria pytest e pip-tools com o que a execução precisa).
+Consequences: §6, §8 (G-5), §9, §11. Os locks valem para Windows com Python 3.11; uma CI em Linux (T-003) exige gerar um lock para essa plataforma. O teste do Python confere só `3.11`, não o patch. `requirements.txt` deixou de ser editável à mão.
+
 ## §11 Open questions
 
 | ID | Question | Blocks |
@@ -315,7 +339,7 @@ Consequences: §3, §4, §7, §8. Limite: a trava cobre o caminho de configuraç
 | Q-02 | **Respondida em 2026-10-07, ver §5 e DEC-005.** O que fica frozen em §5: `schemas/1.01`? também `schemas/1.00` (não usado), ou removê-lo? As pastas vazias `schemas/Componente_Schemas` e `schemas/Componente_recepcao` (não rastreadas) têm algum uso? | T-001 |
 | Q-03 | **Parcial em 2026-10-07:** o humano confirmou que `lika-2026.pfx` é o certificado do cliente e que o titular autorizou o uso em produção restrita. Faltam duas respostas: (a) desenvolver T-004 e T-005 com certificado autoassinado de teste, deixando o do cliente só para T-007? (b) só dados fictícios nos testes automatizados e nunca senha ou conteúdo de certificado em logs? Texto original: Certificado: `certs/lika-2026.pfx` já existe e o `.env` tem senha, mas o contexto dizia que ainda não há A1. É o certificado do cliente? Há autorização do titular para uso em homologação? Onde a DPS de teste pode ser emitida (CNPJ do titular)? Como tratar dados reais em `out/` e em logs? | T-004, T-007 |
 | Q-04 | **Respondida em 2026-10-07: (a), ver DEC-003.** T-001, abordagem: (a) cópia gerada `schemas/1.01-local`, ignorada no git, com script e teste de diferença mínima (seu plano; recomendo, restringindo a remoção às âncoras de início/fim); (b) corrigir em memória ao carregar o esquema, sem arquivo derivado. Em (a), `scripts/preparar_xsd.py` (não rastreado) entra como base? E `.gitignore` ganha `schemas/*-local/`? | T-001 |
-| Q-05 | Ferramentas a adicionar: lock (pip-tools, uv, `pip freeze` com hashes), formatador e linter (ex.: ruff), CI (GitHub Actions; há remoto `origin` no GitHub). | T-002, T-003 |
+| Q-05 | **Parcial em 2026-10-07:** lock com pip-tools, ver DEC-011. Seguem abertos o formatador e linter e a CI (T-003). Texto original: Ferramentas a adicionar: lock (pip-tools, uv, `pip freeze` com hashes), formatador e linter (ex.: ruff), CI (GitHub Actions; há remoto `origin` no GitHub). | T-002, T-003 |
 | Q-06 | Bibliotecas: nfelib só para bindings da DPS, ou manter o modelo próprio? Assinatura: signxml ou lxml+xmlsec? HTTP: httpx ou requests? | T-005, T-007 |
 | Q-07 | Escopo e milestones: M1–M3 de §9 estão certos? Os passos 4 e 5 do README (decodificar retorno; consulta por chave e DANFSe) entram nesta fase? Critério de sucesso de M1 proposto: "G-1 e G-2 passam, com o teste de XSD rodando". | planejamento |
 | Q-08 | Boundaries de §3. Proposta: `src/dps.py` não depende de rede nem de certificado; só `client.py` faz I/O de rede; `scripts/` depende de `src/`, nunca o contrário. | T-004 em diante |
