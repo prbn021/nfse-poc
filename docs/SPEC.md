@@ -81,7 +81,7 @@ Aprovados pelo humano em 2026-10-07 (DEC-004).
 
 | ID | Statement | Enforced by |
 |---|---|---|
-| INV-01 | Os schemas oficiais em `schemas/1.01` nunca são editados | G-3 (`git diff --exit-code main -- schemas/1.00 schemas/1.01`) |
+| INV-01 | Os schemas oficiais em `schemas/1.01` nunca são editados | G-3 (`git diff --exit-code main -- schemas/1.01`) |
 | INV-02 | O ambiente padrão é homologação, e `producao` é recusado pelo código enquanto durar a PoC | `test_sem_variaveis_o_ambiente_e_homologacao` e `test_producao_e_recusado` (`tests/test_config.py`), em G-1. A trava está em `carregar_config()`; ver o limite registrado na DEC-010 |
 | INV-03 | Certificados e senhas nunca vão ao git | `.gitignore` (`.env`, `certs/`, `*.pfx`, `*.p12`, `*.pem`) e G-4, que falha se algum desses arquivos estiver rastreado |
 | INV-04 | O `Id` da DPS é `DPS` + 42 dígitos (45 posições): município (7) + tipo de inscrição federal (1) + inscrição federal (14) + série (5) + número da DPS (15) | `test_id_tem_45_caracteres_e_composicao_correta` |
@@ -101,7 +101,7 @@ Interfaces frozen (mudam só com nova versão, dados de teste regenerados e nova
 Não frozen:
 
 - Variáveis `NFSE_*` de `.env.example`: ainda devem mudar até a transmissão funcionar.
-- `schemas/1.00/`: não é usado e será removido do repositório em T-009.
+- `schemas/1.00/`: não era usado e foi removido do repositório em T-009 (2026-10-08).
 
 Dados de teste "golden": não existem. `out/` é ignorado no git.
 
@@ -169,7 +169,7 @@ Para mudar uma dependência: editar o `.in`, gerar os dois locks de novo, nesta 
 |---|---|---|---|
 | G-1 | Testes | `.\.venv\Scripts\python.exe -m pytest -q -rs` | Toda task |
 | G-2 | Verificação do projeto: gerar e validar a DPS | `.\.venv\Scripts\python.exe scripts\gerar_dps.py` (sucesso = código de saída 0) | Toda task |
-| G-3 | XSDs oficiais intocados | `git diff --exit-code main -- schemas/1.00 schemas/1.01` | Toda task |
+| G-3 | XSDs oficiais intocados | `git diff --exit-code main -- schemas/1.01` | Toda task |
 | G-4 | Nenhum segredo rastreado (`.env`, `*.pfx`, `*.p12`, `*.pem`) | `.\.venv\Scripts\python.exe scripts\checar_segredos.py` (sucesso = código de saída 0) | Toda task |
 | – | Formatação | inexistente | proposta em T-003 |
 | – | Lint com avisos como erro | inexistente | proposta em T-003 |
@@ -213,11 +213,16 @@ Reexecutados antes e depois de atualizar o spec e as fontes com a documentação
 - No repositório: G-1 `51 passed`, nenhum pulado (7 testes novos em `tests/test_lock.py`); G-2 código 0; G-3 sem diferenças; G-4 código 0.
 - As versões resolvidas pelo lock são as mesmas que já estavam instaladas antes da task; a instalação travada acrescentou ao `.venv` o pip-tools e as dependências dele, e atualizou o `pip` para a versão do lock.
 
+### Depois de T-009 (2026-10-08, branch `t-009-remove-schemas-1-00`)
+
+- G-3 passou a conferir só `schemas/1.01` (DEC-005, critério 2 da T-009): sem diferenças. Com o comando antigo ele acusaria a remoção de `schemas/1.00`, que é o objetivo da task.
+- G-1: `52 passed`, nenhum pulado (1 teste novo: só a versão 1.01 existe em `schemas/`). G-2: código de saída 0. G-4: código de saída 0.
+
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
 1. **Norma.** XML Schema Part 2, Apêndice F: as expressões regulares são ancoradas implicitamente no início e no fim; `^` e `$` não são metacaracteres (`^` só tem papel especial dentro de `[...]`). Num `xs:pattern`, portanto, são caracteres literais.
 2. **Comportamento do libxml2 2.11.9 (via lxml 6.1.3).** Esquema mínimo com o mesmo padrão: `^0{0,4}\d{1,5}$` rejeita `1` e `00001` e aceita os textos literais `^1$` e `^00001$`. Sem as âncoras, aceita `1` e `00001` e rejeita `^1$` e `abc`.
-3. **Alcance.** Dos 54 `xs:pattern` em `schemas/1.01`, só um tem âncoras: `TSSerieDPS`, `tiposSimples_v1.01.xsd` linha 161. Em `schemas/1.00` não há nenhum.
+3. **Alcance.** Dos 54 `xs:pattern` em `schemas/1.01`, só um tem âncoras: `TSSerieDPS`, `tiposSimples_v1.01.xsd` linha 161. Em `schemas/1.00` não havia nenhum (pasta removida em T-009).
 4. **Efeito da correção.** Com uma cópia dos XSDs fora do repositório, trocando só esse padrão por `0{0,4}\d{1,5}`, a DPS de exemplo valida com 0 erros. Não há outra falha escondida atrás desta para o XML de exemplo.
 
 Consequência: nenhum valor de `serie` que a API aceitaria passa no XSD oficial com um validador conforme a norma. O validador do servidor provavelmente usa um motor que trata `^`/`$` como âncoras `[INFERRED]`; validar offline contra uma cópia corrigida não prova que o servidor aceita.
@@ -242,7 +247,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004, Q-06 | §5, §6 | todo | A definir; exige `[VERIFY]` do perfil de assinatura exigido pelo padrão nacional |
 | T-006 | Codec GZip+Base64 (`codec.py`) | T-001 | §5 | todo | A definir; ida e volta sem perda |
 | T-008 | Garantias de INV-02 e INV-03 | T-001 | §4, §7, §8 | done | (1) `carregar_config()` sem variáveis de ambiente devolve `homologacao`; (2) `NFSE_AMBIENTE=producao` levanta erro claro citando DEC-002/INV-02; (3) gate novo em §8 que falha se `git ls-files` contiver `.env`, `*.pfx`, `*.p12` ou `*.pem`; (4) `.env.example` deixa de anunciar `producao` como opção |
-| T-009 | Remover `schemas/1.00` do repositório | T-001 | §5, §8 | todo | (1) `schemas/1.00/` removido do git; (2) G-3 passa a conferir só `schemas/1.01`; (3) `schemas/LEIAME.md` e `docs/SOURCES.md` coerentes com a remoção; (4) G-1 e G-2 continuam passando |
+| T-009 | Remover `schemas/1.00` do repositório | T-001 | §5, §8 | review | (1) `schemas/1.00/` removido do git; (2) G-3 passa a conferir só `schemas/1.01`; (3) `schemas/LEIAME.md` e `docs/SOURCES.md` coerentes com a remoção; (4) G-1 e G-2 continuam passando |
 | T-010 | `totTrib` para emitente ME/EPP (E0712) | T-001, Q-13 | §5, §6 | todo | (1) com `op_simp_nac=3` o XML não contém `indTotTrib` e emite outra opção da escolha `totTrib` (qual: Q-13); (2) para não optante o XML continua válido; (3) os dois casos válidos contra a cópia local dos XSDs; (4) teste negativo: a combinação ME/EPP + `indTotTrib` não é gerada |
 | T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006, T-010 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
 | T-011 | Termos do `CLAUDE.md` em inglês e regras básicas do projeto | T-001 | CLAUDE.md, §0, §9, §10 | done | (1) títulos de seção, colunas e termos do spec em inglês, conforme DEC-006; (2) §0 com as regras de idioma, de `Approved`/`done` e de PR e merge; (3) DEC-006 a DEC-009 registradas; (4) nenhum arquivo fora de `docs/` alterado; (5) G-1 a G-3 passam |
@@ -262,6 +267,7 @@ Estado ao fim da sessão de 2026-10-07, para continuar em outra máquina:
 - T-008 em `review` na branch `t-008-production-lock-and-secrets-gate`. Próxima pela DEC-009: T-002, que depende de Q-05; se Q-05 seguir aberta, T-009.
 - T-008 entrou em `main` pela PR #3 (`a7e58dd`); continua em `review` no quadro até o humano pedir o `done`. T-002 em `review` na branch `t-002-pin-toolchain-and-deps`. Na outra máquina, recriar o `.venv` com a instalação travada de §8. Próxima pela DEC-009: T-009.
 - 2026-10-08: T-008 marcada `done` pelo humano na conversa (transcrito pelo agente, DEC-007). T-002 entrou em `main` pela PR #4 (`427d47c`) e continua em `review` no quadro até o humano pedir o `done`.
+- T-009 em `review` na branch `t-009-remove-schemas-1-00`. Próxima pela DEC-009: T-003 (proposta de formatação, lint e CI), que precisa do resto de Q-05.
 - Não viajam pelo git e precisam ser recriados na outra máquina: `.venv`, `.env` (copiar de `.env.example`), `certs/*.pfx` e a senha, chave SSH, `git config user.name`/`user.email`, `docs/referencia/`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
 
 ## §10 Decision log
