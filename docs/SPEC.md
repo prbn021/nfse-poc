@@ -267,7 +267,7 @@ Reexecutados antes e depois de atualizar o spec e as fontes com a documentação
 
 - G-6 e G-7 (novos): código de saída 0. Antes da task, com a mesma configuração, o lint apontava 17 itens e a formatação mudaria 13 arquivos.
 - G-1: `64 passed`, nenhum pulado, antes e depois. G-2: código de saída 0, com saída idêntica antes e depois, fora a hora de emissão. G-3: sem diferenças. G-4: código de saída 0. G-5: código de saída 0 no `.venv` do projeto, com o lock novo.
-- A CI não foi executada antes de a branch ser publicada: ela só roda quando a PR é aberta. O resultado da primeira execução precisa ser conferido na PR.
+- CI: a primeira execução, na PR da task (commit `2e68931`, `windows-latest`), terminou com sucesso em todos os passos, incluindo a instalação travada e G-1 a G-7 (conferido em 2026-10-08 pela API pública do GitHub, execução 37842686635). A DEC-027 foi escrita antes disso e diz que a CI ainda não tinha sido vista rodando.
 
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
@@ -324,7 +324,7 @@ Estado ao fim da sessão de 2026-10-08. Para retomar com o agente: pedir que lei
 **Onde o trabalho parou**
 
 - `main` está em `914ead3` e contém T-000, T-001, T-002, T-008, T-009, T-011, T-012, T-013 e T-017, todas `done`. T-017 entrou pela PR #8 e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
-- T-003 (ruff e CI em Windows) está em `review` na branch `t-003-ruff-and-ci`. Falta o humano abrir a PR, conferir a primeira execução da CI, mesclar com squash e pedir o `done`:
+- T-003 (ruff e CI em Windows) está em `review` na branch `t-003-ruff-and-ci`. A PR está aberta e a CI passou. Falta o humano mesclar com squash e pedir o `done`:
   - link: `https://github.com/prbn021/nfse-poc/compare/main...t-003-ruff-and-ci?expand=1`
   - título: `T-003: add ruff format and lint gates and a Windows CI workflow`
 
