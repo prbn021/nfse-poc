@@ -45,6 +45,12 @@ def test_remover_ancoras_nao_toca_no_resto(intacto):
     assert remover_ancoras(intacto) == intacto
 
 
+def test_so_a_versao_1_01_dos_xsds_esta_no_repositorio():
+    versoes = sorted(p.name for p in (RAIZ / "schemas").iterdir()
+                     if p.is_dir() and not p.name.endswith("-local"))
+    assert versoes == ["1.01"]
+
+
 def test_dir_local_fica_ao_lado_do_oficial():
     assert dir_local(OFICIAL) == RAIZ / "schemas" / "1.01-local"
 

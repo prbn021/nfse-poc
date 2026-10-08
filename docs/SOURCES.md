@@ -7,7 +7,7 @@ Fatos externos checados e código copiado. "XSD local" significa os arquivos em 
 |------------|-------------------------------|--------|---------|---------|
 | 2026-10-07 | Regex de `xs:pattern` é ancorada implicitamente no início e no fim; `^` e `$` não são metacaracteres (`^` só é especial dentro de grupo de caracteres) | Metacaracteres: `.` `\` `?` `*` `+` `{` `}` `(` `)` `[` `]` | XML Schema Part 2: Datatypes, 2ª ed. (2004), Apêndice F | https://www.w3.org/TR/xmlschema-2/#regexs |
 | 2026-10-07 | libxml2 trata `^` e `$` em `xs:pattern` como literais | `^0{0,4}\d{1,5}$` rejeita `1` e `00001`, aceita `^1$` e `^00001$` | lxml 6.1.3 / libxml2 2.11.9 | Experimento local com `etree.XMLSchema` (esquema mínimo), `.venv` do projeto |
-| 2026-10-07 | Padrões com âncoras nos XSDs | 1 de 54 em `schemas/1.01` (`TSSerieDPS`, `tiposSimples_v1.01.xsd:161`); 0 em `schemas/1.00` | XSD local v1.01 / v1.00 | `grep` nos arquivos locais |
+| 2026-10-07 | Padrões com âncoras nos XSDs | 1 de 54 em `schemas/1.01` (`TSSerieDPS`, `tiposSimples_v1.01.xsd:161`); 0 em `schemas/1.00` (pasta removida em 2026-10-08, T-009) | XSD local v1.01 / v1.00 | `grep` nos arquivos locais |
 | 2026-10-07 | DPS de exemplo contra o XSD com o padrão de `serie` sem âncoras | 0 erros | XSD local v1.01 | Cópia temporária fora do repositório, `src.dps.validar_xml` |
 | 2026-10-07 | `Id` da DPS | 45 posições, padrão `DPS[0-9]{42}`: "DPS" + Cód.Mun (7) + Tipo de Inscrição Federal (1) + Inscrição Federal (14) + Série (5) + Núm. DPS (15) | XSD local v1.01 | `tiposSimples_v1.01.xsd`, `TSIdDPS` |
 | 2026-10-07 | `opSimpNac` | 1 Não Optante; 2 MEI; 3 ME/EPP | XSD local v1.01 | `tiposSimples_v1.01.xsd`, `TSOpSimpNac` |
@@ -48,4 +48,4 @@ Fatos externos checados e código copiado. "XSD local" significa os arquivos em 
 ## Copied code
 | Date       | Our path            | Origin (URL + commit) | License | Task  |
 |------------|---------------------|-----------------------|---------|-------|
-| (antes de 2026-10-07) | `schemas/1.00/*.xsd`, `schemas/1.01/*.xsd` | Pacote de schemas do Portal Nacional da NFS-e, segundo `schemas/LEIAME.md` (https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual). Data de download e versão do pacote não registradas. | Não informada (SPEC Q-10) | anterior ao Bootstrap |
+| (antes de 2026-10-07) | `schemas/1.01/*.xsd` (`schemas/1.00/*.xsd` veio do mesmo pacote e foi removido em 2026-10-08, T-009) | Pacote de schemas do Portal Nacional da NFS-e, segundo `schemas/LEIAME.md` (https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual). Data de download e versão do pacote não registradas. | Não informada (SPEC Q-10) | anterior ao Bootstrap |
