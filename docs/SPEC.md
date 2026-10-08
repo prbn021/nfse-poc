@@ -241,7 +241,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 |-------|--------|------|-------|--------|------------------------|
 | T-000 | Bootstrap: spec, fontes e baseline | – | CLAUDE.md | done | `docs/SPEC.md` e `docs/SOURCES.md` no branch `t-000-spec`; baseline de G-1 e G-2 registrado; humano escreve `Approved:` em §0 |
 | T-001 | Validação offline da DPS falha no padrão de `serie` | T-000, Q-01, Q-04 | §4, §5, §6, §8 | done | (1) G-2 sai com código 0 e imprime `[OK] Válida`; (2) `test_xml_valido_contra_xsd_oficial` deixa de ser pulado e passa; (3) `git diff main -- schemas/1.00 schemas/1.01` vazio; (4) teste negativo: `serie` inválida (ex.: `abc`, 6 dígitos) continua rejeitada pelo esquema usado na validação; (5) se houver cópia derivada: é regenerável por script, ignorada no git, e um teste garante que ela difere dos oficiais só nas âncoras `^`/`$` de início e fim de `xs:pattern` (hoje, 1 linha); (6) `.env.example` e o default de `NFSE_XSD_DIR` coerentes com o local real dos XSDs |
-| T-002 | Fixar toolchain e dependências | T-000 | §6, §8 | review | Versão do Python fixada; dependências com versões exatas e lock; instalação travada documentada em §8 e funcionando em checkout limpo. Ferramenta de lock: pip-tools (Q-05, DEC-011) |
+| T-002 | Fixar toolchain e dependências | T-000 | §6, §8 | done | Versão do Python fixada; dependências com versões exatas e lock; instalação travada documentada em §8 e funcionando em checkout limpo. Ferramenta de lock: pip-tools (Q-05, DEC-011) |
 | T-003 | Propor gates de formatação e lint | T-000 | §8 | todo | Proposta apresentada ao humano (ferramenta, regras, custo); nada instalado sem aprovação (Q-05) |
 | T-004 | Certificado A1: carregar PFX (`certificado.py`) | T-001, Q-03 | §7 | blocked (Q-03) | A definir com o humano |
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004, Q-06 | §5, §6 | todo | A definir; exige `[VERIFY]` do perfil de assinatura exigido pelo padrão nacional |
@@ -252,9 +252,42 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006, T-010 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
 | T-011 | Termos do `CLAUDE.md` em inglês e regras básicas do projeto | T-001 | CLAUDE.md, §0, §9, §10 | done | (1) títulos de seção, colunas e termos do spec em inglês, conforme DEC-006; (2) §0 com as regras de idioma, de `Approved`/`done` e de PR e merge; (3) DEC-006 a DEC-009 registradas; (4) nenhum arquivo fora de `docs/` alterado; (5) G-1 a G-3 passam |
 
-### Ponto de retomada (2026-10-07)
+### Ponto de retomada (2026-10-08)
 
-Estado ao fim da sessão de 2026-10-07, para continuar em outra máquina:
+Estado ao fim da sessão de 2026-10-08, para continuar em outra máquina. Para retomar com o agente: pedir que leia o `CLAUDE.md` e este ponto de retomada.
+
+**Onde o trabalho parou**
+
+- `main` está em `427d47c` e contém T-000, T-001, T-011, T-008 e T-002, todas `done`.
+- T-009 (remover `schemas/1.00`) está em `review` na branch `t-009-remove-schemas-1-00`, publicada em `origin`. Esta atualização do spec também está nessa branch. Falta o humano abrir a PR, mesclar com squash e pedir o `done`:
+  - link: `https://github.com/prbn021/nfse-poc/compare/main...t-009-remove-schemas-1-00?expand=1`
+  - título: `T-009: remove the unused schemas/1.00 directory`
+- T-002 marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
+
+**Primeiros passos na outra máquina**
+
+1. Clonar ou atualizar o repositório. Se a PR da T-009 ainda não foi mesclada, mesclar antes de abrir outra branch (DEC-008: cada task parte de `main` atualizado).
+2. Instalar o Python 3.11 e recriar o `.venv` com a instalação travada de §8 (G-5).
+3. `Copy-Item .env.example .env`. Para os gates não é preciso preencher certificado nem senha.
+4. Rodar G-1 a G-4 e conferir com "Depois de T-009" em §8 (`52 passed`).
+5. Não viajam pelo git e precisam ser levados à mão, se forem necessários: `certs/*.pfx` e a senha, `docs/referencia/` (documentação oficial e a nota de exemplo, que tem dados reais), chave SSH, `git config user.name`/`user.email`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
+6. Se a máquina não tiver o `gh`, as PRs continuam sendo abertas pela interface do GitHub, com link, título e descrição entregues pelo agente.
+
+**Próxima task e o que está pendente para ela**
+
+- Pela ordem da DEC-009, a próxima é **T-003** (proposta de gates de formatação e lint). Ela depende do resto de Q-05, ainda sem resposta do humano: usar ruff como formatador e linter? criar CI no GitHub Actions? Recomendação do agente, não decidida: ruff com CI. Uma CI em Linux exige gerar um lock de dependências para essa plataforma (DEC-011). A T-003 é uma proposta: nada é instalado sem aprovação.
+- Depois, na ordem: **T-010** (bloqueada por Q-13), **T-006** (sem bloqueio, mas com acceptance criteria "a definir" com o humano), **T-004** (bloqueada por Q-03 a/b), **T-005** (Q-06), **T-007**.
+- Open questions sem resposta: Q-06, Q-07, Q-08, Q-09, Q-10, Q-12, Q-13. Parciais: Q-03, Q-05, Q-11.
+- `[VERIFY]` abertos em §6: formato de `serie` no XML, URL base da SEFIN, procedência dos XSDs, demais regras de negócio do Anexo I.
+
+**Outros**
+
+- As branches `t-002-pin-toolchain-and-deps`, `t-008-production-lock-and-secrets-gate` e `t-011-spec-terms-and-rules` já foram mescladas e continuam em `origin` por escolha do humano.
+- Regras de trabalho em §0: commits, PRs e branches em inglês; uma PR por task com squash; `done` só a pedido explícito.
+
+### Histórico do ponto de retomada (2026-10-07 e 2026-10-08)
+
+Registro das atualizações anteriores, em ordem. O estado atual é o da seção acima.
 
 - T-000 e T-001 em `review`, aguardando o humano marcar `done`. Branches `t-000-spec` e `t-001-validacao-serie-xsd` publicadas em `origin`; `main` só tem o commit inicial.
 - §11 respondidas: Q-01, Q-02, Q-04. Parcial: Q-03. Ainda não discutidas: Q-05 a Q-11, nessa ordem.
