@@ -1,4 +1,5 @@
 """Configuração por ambiente. Nada de segredo no código: tudo vem do .env."""
+
 from __future__ import annotations
 
 import os
@@ -31,7 +32,9 @@ def carregar_config() -> Config:
     load_dotenv(RAIZ / ".env")
     ambiente = os.getenv("NFSE_AMBIENTE", "homologacao").strip().lower()
     if ambiente == "producao":
-        raise ValueError("NFSE_AMBIENTE=producao é recusado durante a PoC (INV-02, DEC-002): use homologacao")
+        raise ValueError(
+            "NFSE_AMBIENTE=producao é recusado durante a PoC (INV-02, DEC-002): use homologacao"
+        )
     if ambiente not in TP_AMB:
         raise ValueError(f"NFSE_AMBIENTE inválido: {ambiente!r} (use homologacao)")
     return Config(

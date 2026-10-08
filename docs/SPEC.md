@@ -135,11 +135,12 @@ Dados de teste "golden": não existem. `out/` é ignorado no git.
 | python-dotenv | 1.2.4 | Sim: `requirements.in`, lock em `requirements.txt` |
 | pytest | 9.1.1 | Sim: `requirements-dev.in`, lock em `requirements-dev.txt` |
 | pip-tools | 7.6.2 | Sim: `requirements-dev.in`, lock em `requirements-dev.txt` |
+| ruff | 0.16.10 | Sim: `requirements-dev.in`, lock em `requirements-dev.txt`. Configuração em `ruff.toml` |
 
 - Dependências diretas com versão exata em `requirements.in` (execução) e `requirements-dev.in` (testes e pip-tools). Os locks `requirements.txt` e `requirements-dev.txt` são gerados pelo `pip-compile`, com versão exata e hashes SHA-256 de todas as dependências, inclusive `pip` e `setuptools`. Não são editados à mão (T-002, DEC-011).
 - Os locks foram gerados no Windows com Python 3.11 e resolvem as dependências para essa plataforma (por exemplo, incluem `colorama`). Outra plataforma ou versão de Python exige gerar de novo.
 - `pyvenv.cfg` registra que a venv foi criada em `C:\Users\preis\rpa\nfse-poc\.venv`, outro caminho. `python.exe -m …` funciona; os lançadores `.exe` em `.venv\Scripts` (ex.: `pytest.exe`) podem estar quebrados `[INFERRED]`. Os gates usam `python -m`.
-- Bibliotecas escolhidas pelo humano em 2026-10-08 e ainda não instaladas (DEC-012, DEC-015): ruff (formatação e lint, T-003); signxml (assinatura, T-005), condicionada a `[VERIFY: perfil de assinatura XMLDSIG exigido pelo padrão nacional e se o signxml o produz]`; httpx (HTTP/mTLS, T-015 e T-007); `cryptography` (carregar o PFX e gerar o autoassinado dos testes, T-004). Cada uma entra, com versão exata e lock, na task que a usa. nfelib foi descartada: o modelo da DPS continua próprio. `[VERIFY: versões, licenças e API de ruff, signxml, httpx e cryptography, na task que instalar cada uma]`.
+- Bibliotecas escolhidas pelo humano em 2026-10-08 e ainda não instaladas (DEC-015): signxml (assinatura, T-005), condicionada a `[VERIFY: perfil de assinatura XMLDSIG exigido pelo padrão nacional e se o signxml o produz]`; httpx (HTTP/mTLS, T-015 e T-007); `cryptography` (carregar o PFX e gerar o autoassinado dos testes, T-004). Cada uma entra, com versão exata e lock, na task que a usa. nfelib foi descartada: o modelo da DPS continua próprio. `[VERIFY: versões, licenças e API de signxml, httpx e cryptography, na task que instalar cada uma]`. O ruff foi instalado na T-003 (DEC-027).
 
 Itens de verificação:
 
@@ -177,7 +178,7 @@ Todas as checagens "no XSD" valem para os arquivos locais, e dependem do item de
 
 ## §8 Gates
 
-Comandos em PowerShell, a partir da raiz. Não há CI, Makefile nem scripts de verificação no repositório; os gates abaixo vêm do que o projeto já executa. Uma CI no GitHub Actions, em Windows, foi aprovada e entra na T-003 (DEC-012).
+Comandos em PowerShell, a partir da raiz. Não há Makefile. A CI (`.github/workflows/ci.yml`, GitHub Actions em `windows-latest`) roda G-5, G-6, G-7, G-1, G-2, G-3 e G-4 em toda PR e em cada push em `main`; em push para `main` o G-3 é pulado, porque não há o que comparar (T-003, DEC-027).
 
 Preparação a partir de um checkout limpo, com instalação travada (G-5):
 
@@ -200,8 +201,8 @@ Para mudar uma dependência: editar o `.in`, gerar os dois locks de novo, nesta 
 | G-2 | Verificação do projeto: gerar e validar a DPS | `.\.venv\Scripts\python.exe scripts\gerar_dps.py` (sucesso = código de saída 0) | Toda task |
 | G-3 | Áreas frozen intocadas (XSDs e documentação oficial) | `git diff --exit-code main -- schemas/1.01 docs/referencia/gov-docs` | Toda task |
 | G-4 | Nenhum segredo ou referência privada rastreados (`.env`, `*.pfx`, `*.p12`, `*.pem`, e `docs/referencia/` fora de `gov-docs/`) | `.\.venv\Scripts\python.exe scripts\checar_segredos.py` (sucesso = código de saída 0) | Toda task |
-| – | Formatação | inexistente | ruff, a implementar em T-003 (DEC-012) |
-| – | Lint com avisos como erro | inexistente | ruff, a implementar em T-003 (DEC-012) |
+| G-6 | Formatação | `.\.venv\Scripts\python.exe -m ruff format --check .` (para corrigir: o mesmo comando sem `--check`) | Toda task |
+| G-7 | Lint com avisos como erro | `.\.venv\Scripts\python.exe -m ruff check .` (qualquer apontamento dá código de saída 1) | Toda task |
 | G-5 | Instalação travada | `.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt` (precisa de rede) | Ao preparar o ambiente e em toda task que mude um `requirements*`. Nas demais, `tests/test_lock.py` (em G-1) confere que o ambiente bate com os locks |
 | – | Build | não se aplica: o projeto não gera pacote nem binário | – |
 
@@ -262,6 +263,12 @@ Reexecutados antes e depois de atualizar o spec e as fontes com a documentação
 - G-3 com o comando novo acusa, nesta branch, os 16 arquivos acrescentados em `docs/referencia/gov-docs/`, que é o objetivo da task; depois do merge volta a passar. Para `schemas/1.01`, sem diferenças.
 - G-4 testado à mão: com uma cópia da nota de exemplo adicionada ao índice do git, sai com código 1 e aponta o arquivo; desfeito em seguida.
 
+### Depois de T-003 (2026-10-08, branch `t-003-ruff-and-ci`)
+
+- G-6 e G-7 (novos): código de saída 0. Antes da task, com a mesma configuração, o lint apontava 17 itens e a formatação mudaria 13 arquivos.
+- G-1: `64 passed`, nenhum pulado, antes e depois. G-2: código de saída 0, com saída idêntica antes e depois, fora a hora de emissão. G-3: sem diferenças. G-4: código de saída 0. G-5: código de saída 0 no `.venv` do projeto, com o lock novo.
+- A CI não foi executada antes de a branch ser publicada: ela só roda quando a PR é aberta. O resultado da primeira execução precisa ser conferido na PR.
+
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
 1. **Norma.** XML Schema Part 2, Apêndice F: as expressões regulares são ancoradas implicitamente no início e no fim; `^` e `$` não são metacaracteres (`^` só tem papel especial dentro de `[...]`). Num `xs:pattern`, portanto, são caracteres literais.
@@ -288,7 +295,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-000 | Bootstrap: spec, fontes e baseline | – | CLAUDE.md | done | `docs/SPEC.md` e `docs/SOURCES.md` no branch `t-000-spec`; baseline de G-1 e G-2 registrado; humano escreve `Approved:` em §0 |
 | T-001 | Validação offline da DPS falha no padrão de `serie` | T-000, Q-01, Q-04 | §4, §5, §6, §8 | done | (1) G-2 sai com código 0 e imprime `[OK] Válida`; (2) `test_xml_valido_contra_xsd_oficial` deixa de ser pulado e passa; (3) `git diff main -- schemas/1.00 schemas/1.01` vazio; (4) teste negativo: `serie` inválida (ex.: `abc`, 6 dígitos) continua rejeitada pelo esquema usado na validação; (5) se houver cópia derivada: é regenerável por script, ignorada no git, e um teste garante que ela difere dos oficiais só nas âncoras `^`/`$` de início e fim de `xs:pattern` (hoje, 1 linha); (6) `.env.example` e o default de `NFSE_XSD_DIR` coerentes com o local real dos XSDs |
 | T-002 | Fixar toolchain e dependências | T-000 | §6, §8 | done | Versão do Python fixada; dependências com versões exatas e lock; instalação travada documentada em §8 e funcionando em checkout limpo. Ferramenta de lock: pip-tools (Q-05, DEC-011) |
-| T-003 | Gates de formatação e lint com ruff, e CI em Windows | T-000 | §6, §8 | todo | (1) as regras do ruff são apresentadas ao humano e aprovadas antes de qualquer instalação; (2) ruff com versão exata em `requirements-dev.in` e nos locks; (3) dois gates novos em §8, formatação e lint com avisos como erro, passando no código existente; (4) workflow do GitHub Actions em `windows-latest` que faz a instalação travada (G-5) e roda os gates em toda PR; (5) nenhuma mudança de comportamento: G-1 e G-2 com o mesmo resultado (DEC-012) |
+| T-003 | Gates de formatação e lint com ruff, e CI em Windows | T-000 | §6, §8 | review | (1) as regras do ruff são apresentadas ao humano e aprovadas antes de qualquer instalação; (2) ruff com versão exata em `requirements-dev.in` e nos locks; (3) dois gates novos em §8, formatação e lint com avisos como erro, passando no código existente; (4) workflow do GitHub Actions em `windows-latest` que faz a instalação travada (G-5) e roda os gates em toda PR; (5) nenhuma mudança de comportamento: G-1 e G-2 com o mesmo resultado (DEC-012) |
 | T-004 | Certificado A1: carregar PFX (`certificado.py`) | T-001, T-019 | §3, §4, §7 | todo | (1) carrega um PFX com senha e expõe certificado e chave privada; (2) os testes usam um PFX autoassinado gerado por eles, nunca o do cliente; (3) senha errada, arquivo ausente e arquivo que não é PFX geram erro claro; (4) teste de INV-05: a senha e a chave não aparecem em `repr`, em mensagem de erro nem em log; (5) `certificado.py` recebe caminho e senha como argumentos, sem certificado global; um script manual abre o certificado do emitente indicado e mostra só titular, CNPJ e validade; (6) `cryptography` com versão exata e lock; (7) B-1 a B-3 respeitadas (DEC-014) |
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004 | §5, §6 | todo | A definir com o humano depois de fechar o `[VERIFY]` do perfil de assinatura do padrão nacional (§6). Já decidido: signxml, se atender ao perfil; se não atender, voltar ao humano (DEC-015). Testes só com certificado autoassinado |
 | T-006 | Codec GZip+Base64 (`codec.py`) | T-001 | §5 | todo | (1) codificar: XML em bytes → GZip → Base64 em texto; (2) decodificar faz o inverso e devolve os mesmos bytes, com teste de ida e volta sobre entradas variadas; (3) entrada que não é Base64 ou GZip válido gera erro claro; (4) a saída é lida pelo `gzip` da biblioteca padrão; (5) só biblioteca padrão, sem dependência nova. Aprovados pelo humano em 2026-10-08 |
@@ -316,10 +323,10 @@ Estado ao fim da sessão de 2026-10-08. Para retomar com o agente: pedir que lei
 
 **Onde o trabalho parou**
 
-- `main` está em `422aec0` e contém T-000, T-001, T-002, T-008, T-009, T-011, T-012 e T-013, todas `done`. T-013 entrou pela PR #7 e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
-- T-017 (versionar a documentação oficial) está em `review` na branch `t-017-version-official-docs`. Falta o humano abrir a PR, mesclar com squash e pedir o `done`:
-  - link: `https://github.com/prbn021/nfse-poc/compare/main...t-017-version-official-docs?expand=1`
-  - título: `T-017: version the official documentation under docs/referencia/gov-docs`
+- `main` está em `914ead3` e contém T-000, T-001, T-002, T-008, T-009, T-011, T-012, T-013 e T-017, todas `done`. T-017 entrou pela PR #8 e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
+- T-003 (ruff e CI em Windows) está em `review` na branch `t-003-ruff-and-ci`. Falta o humano abrir a PR, conferir a primeira execução da CI, mesclar com squash e pedir o `done`:
+  - link: `https://github.com/prbn021/nfse-poc/compare/main...t-003-ruff-and-ci?expand=1`
+  - título: `T-003: add ruff format and lint gates and a Windows CI workflow`
 
 **Para preparar uma máquina**
 
@@ -329,8 +336,7 @@ Estado ao fim da sessão de 2026-10-08. Para retomar com o agente: pedir que lei
 
 **Próxima task e o que está pendente para ela**
 
-- Ordem das próximas (DEC-020 e DEC-025, confirmadas pelo humano em 2026-10-08): T-003, T-016, T-019, T-004, T-015, T-010, T-014, T-018, T-006, T-005, T-007, e depois T-020 a T-023. A ideia: depois das duas tasks de preparação, ir direto ao certificado e ao teste de conexão mTLS, que é o maior risco e pode depender de terceiros; o trabalho no modelo (M1) vem em seguida.
-- **T-003** está liberada: ruff e CI em Windows aprovados (DEC-012). Ela começa apresentando as regras do ruff, antes de instalar.
+- Ordem das próximas (DEC-020 e DEC-025, confirmadas pelo humano em 2026-10-08): T-016, T-019, T-004, T-015, T-010, T-014, T-018, T-006, T-005, T-007, e depois T-020 a T-023. A ideia: depois das duas tasks de preparação, ir direto ao certificado e ao teste de conexão mTLS, que é o maior risco e pode depender de terceiros; o trabalho no modelo (M1) vem em seguida.
 - **T-010** está liberada (DEC-013, DEC-022, DEC-024): só ME/EPP com tudo pelo Simples; Não Optante, MEI e ISS por fora são recusados pelo modelo.
 - **T-020 a T-023** têm acceptance criteria "a definir": dependem de ler as regras do Anexo I para cada caso.
 - **T-005** e **T-007** ainda têm acceptance criteria "a definir".
@@ -363,6 +369,7 @@ Registro das atualizações anteriores, em ordem. O estado atual é o da seção
 - 2026-10-08: T-012 entrou em `main` pela PR #6 (`d84d291`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). T-013 criada a pedido do humano para responder as open questions; respondidas nesta data: Q-03, Q-05, Q-06, Q-07, Q-08, Q-09, Q-10, Q-12 e Q-13, mais os acceptance criteria da T-006. Tasks novas: T-014, T-015, T-016, T-017 (versionar a documentação oficial, DEC-021) e T-018 (campos opcionais usados pelo cliente, DEC-023). Open questions novas: Q-14, Q-15 e Q-16 (respondidas na mesma data), Q-17 e Q-18. O humano informou que o produto atende várias empresas e trouxe respostas dos contadores sobre o perfil da carteira (DEC-024); tasks novas T-019 a T-023. O humano autorizou o agente a ler a nota fiscal antiga do cliente (PDF e XML, em `docs/referencia/`, fora do git); nenhum dado dela foi escrito no repositório.
 - 2026-10-08: T-013 entrou em `main` pela PR #7 (`422aec0`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). T-017 em `review` na branch `t-017-version-official-docs`. Próxima pela ordem: T-003.
 - 2026-10-08: T-017 entrou em `main` pela PR #8 (`914ead3`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007).
+- 2026-10-08: T-003 em `review` na branch `t-003-ruff-and-ci`, com as regras do ruff aprovadas pelo humano na conversa. Próxima pela ordem: T-016.
 
 ## §10 Decision log
 
@@ -521,6 +528,12 @@ Context: a T-017 pede a pasta `docs/referencia/gov-docs/` como frozen, conferida
 Decision: do agente (escolhas de implementação): (a) manifesto `SHA256SUMS` na pasta e `tests/test_gov_docs.py`, em G-1, que falha se um arquivo mudar, sumir ou aparecer sem estar no manifesto; G-3 também passa a listar a pasta; (b) a regra de referência privada entra em `src/segredos.py`, na mesma função `proibidos` que o G-4 já usa, em vez de um script novo; (c) `.gitignore` troca `docs/referencia/` por `docs/referencia/*` mais a exceção `!docs/referencia/gov-docs/`, porque o git não reinclui nada dentro de uma pasta ignorada inteira; (d) `.gitattributes` marca `*.pdf` e `*.xlsx` como binários, para a conversão de fim de linha nunca alterar os arquivos e quebrar o manifesto.
 Alternatives: só G-3 (rejeitado: não aponta qual arquivo mudou nem pega um arquivo estranho na pasta, e falha na própria branch da task); um gate G-6 separado para a referência privada (rejeitado: mesma lógica e mesma entrada do G-4).
 Consequences: §3, §5, §7, §8. O nome `segredos` passa a cobrir também material com dados reais, que não é segredo no sentido de INV-03. Trocar um documento oficial exige mudar o manifesto no mesmo commit, o que fica visível na revisão. Os arquivos não foram comparados com os que a página oficial publica hoje: `[VERIFY: procedência dos arquivos de gov-docs]`, como o dos XSDs. Antes de versionar, os metadados foram conferidos: autores e datas de modificação são anteriores à entrega ao projeto, e os comentários embutidos no Anexo I são notas técnicas da própria planilha.
+
+### DEC-027: Configuração do ruff e desenho da CI (2026-10-08, T-003)
+Context: a DEC-012 aprovou ruff e CI em Windows. A T-003 exigia apresentar as regras antes de instalar. Medido antes, num ambiente temporário fora do projeto: 16 apontamentos de lint e 13 arquivos a reformatar, em 755 linhas.
+Decision: do humano, na conversa de 2026-10-08: linha de 100 caracteres; grupos `E`, `W`, `F`, `I`, `B`, `UP`, `SIM`, `RUF`; regras de segurança `S` só em `src/` e `scripts/`. Escolhas de implementação do agente: ruff 0.16.10, a versão que o PyPI entregava na data; configuração em `ruff.toml`, e não em `pyproject.toml`, porque o projeto não é um pacote; `scripts/*.py` dispensados de `E402`, porque ajustam o `sys.path` antes de importar `src`; dois `noqa` com justificativa, em vez de mudar comportamento: `S607` na chamada do `git` em `scripts/checar_segredos.py` e `S101` no `assert` de `gerar_id`; `zip(..., strict=True)` num teste que já conferia os tamanhos antes. CI: um job em `windows-latest`, com `actions/checkout@v7` e `actions/setup-python@v7` lendo `.python-version`, venv e instalação travada como no `README.md`, um gate por passo; dispara em `pull_request` e em push para `main`; o G-3 só roda em PR, depois de buscar `main`.
+Alternatives: linha de 88 ou 120 (rejeitadas pelo humano: 20 e 1 linhas longas, contra 8); `S` também nos testes (rejeitado: aponta todo `assert`); trocar o `assert` de `gerar_id` por `ValueError` (rejeitado nesta task: mudaria o tipo do erro, e a task não pode mudar comportamento); fixar as actions por hash de commit (não feito: fica como melhoria possível).
+Consequences: §6, §8 (G-6, G-7, CI), §9. Docstrings longas foram reescritas em mais de uma linha e os comentários alinhados em coluna de `src/dps.py` deixaram de ficar alinhados. As actions são referenciadas pela tag de versão maior, que o dono do repositório delas pode mover. A CI ainda não foi vista rodando.
 
 ## §11 Open questions
 

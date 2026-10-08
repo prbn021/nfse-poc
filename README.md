@@ -84,9 +84,13 @@ As outras verificações que toda mudança precisa passar (lista completa em `do
 .\.venv\Scripts\python.exe scripts\gerar_dps.py          # sai com código 0
 git diff --exit-code main -- schemas/1.01 docs/referencia/gov-docs   # sem saída: XSDs e documentação oficial intocados
 .\.venv\Scripts\python.exe scripts\checar_segredos.py    # nenhum .env, certificado ou referência privada no git
+.\.venv\Scripts\python.exe -m ruff format --check .      # formatação; sem --check, corrige
+.\.venv\Scripts\python.exe -m ruff check .               # lint; qualquer apontamento é erro
 ```
 
 No PowerShell, `$LASTEXITCODE` mostra o código de saída do último comando.
+
+As mesmas verificações rodam no GitHub Actions, em Windows, em toda PR (`.github/workflows/ci.yml`).
 
 ## Problemas comuns
 

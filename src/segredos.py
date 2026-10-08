@@ -1,8 +1,9 @@
-"""Arquivos que nunca podem ser versionados: .env e certificados (INV-03) e referências com dados reais."""
+"""Arquivos que nunca podem ser versionados: .env, certificados (INV-03) e referências privadas."""
+
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import PurePosixPath
-from typing import Iterable
 
 EXTENSOES = (".pfx", ".p12", ".pem")
 

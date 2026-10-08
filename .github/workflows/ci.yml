@@ -1,0 +1,50 @@
+# Roda os gates de docs/SPEC.md §8 em toda PR e em cada push em main (T-003, DEC-027).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      - name: Criar a venv
+        run: python -m venv .venv
+
+      - name: G-5 instalação travada
+        run: .\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt
+
+      - name: G-6 formatação
+        run: .\.venv\Scripts\python.exe -m ruff format --check .
+
+      - name: G-7 lint
+        run: .\.venv\Scripts\python.exe -m ruff check .
+
+      - name: G-1 testes
+        run: .\.venv\Scripts\python.exe -m pytest -q -rs
+
+      - name: G-2 gerar e validar a DPS
+        run: .\.venv\Scripts\python.exe scripts\gerar_dps.py
+
+      # Numa PR o checkout não traz a branch main; em push para main não há o que comparar.
+      - name: Buscar main para o G-3
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags --depth=1 origin main:main
+
+      - name: G-3 áreas frozen intocadas
+        if: github.event_name == 'pull_request'
+        run: git diff --exit-code main -- schemas/1.01 docs/referencia/gov-docs
+
+      - name: G-4 nenhum segredo rastreado
+        run: .\.venv\Scripts\python.exe scripts\checar_segredos.py

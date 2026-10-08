@@ -1,4 +1,8 @@
-"""Falha se o git rastrear .env, certificado (.pfx, .p12, .pem) ou arquivo de docs/referencia fora de gov-docs. Gate G-4, INV-03."""
+"""Gate G-4 (INV-03): falha se o git rastrear o que não pode ser versionado.
+
+Isto é: .env, certificado (.pfx, .p12, .pem) ou arquivo de docs/referencia fora de gov-docs.
+"""
+
 import subprocess
 import sys
 from pathlib import Path
@@ -10,7 +14,12 @@ from src.segredos import proibidos
 
 
 def main() -> int:
-    saida = subprocess.run(["git", "ls-files", "-z"], cwd=RAIZ, capture_output=True, check=True).stdout
+    saida = subprocess.run(
+        ["git", "ls-files", "-z"],  # noqa: S607 (o git vem do PATH de quem roda o gate)
+        cwd=RAIZ,
+        capture_output=True,
+        check=True,
+    ).stdout
     rastreados = [c for c in saida.decode("utf-8").split("\0") if c]
     achados = proibidos(rastreados)
     if achados:
@@ -18,7 +27,10 @@ def main() -> int:
         for a in achados:
             print("   -", a)
         return 1
-    print(f"[OK] Nenhum .env, certificado ou referência privada entre os {len(rastreados)} arquivos rastreados")
+    print(
+        "[OK] Nenhum .env, certificado ou referência privada "
+        f"entre os {len(rastreados)} arquivos rastreados"
+    )
     return 0
 
 
