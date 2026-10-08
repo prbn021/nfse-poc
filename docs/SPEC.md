@@ -61,10 +61,12 @@ scripts/gerar_dps.py ──> src/config.py  (lê .env via python-dotenv)
         ├──────────────> src/dps.py     (dataclasses + lxml: modelo, para_xml, validar_xml)
         └──────────────> src/xsd.py     (cópia local dos XSDs sem âncoras)
 scripts/preparar_xsd.py ─> src/config.py, src/xsd.py
-tests/ ────────────────> src/dps.py, src/xsd.py, src/config.py (só RAIZ)
+scripts/checar_segredos.py ─> src/segredos.py  (lê `git ls-files`)
+tests/ ────────────────> src/dps.py, src/xsd.py, src/config.py, src/segredos.py
 ```
 
-- `src/config.py`: `Config` imutável; `NFSE_AMBIENTE` tem default `homologacao`; `tp_amb` 1=produção, 2=homologação.
+- `src/config.py`: `Config` imutável; `NFSE_AMBIENTE` tem default `homologacao` e `producao` levanta `ValueError` (INV-02); `tp_amb` 1=produção, 2=homologação.
+- `src/segredos.py`: `proibidos` aponta, numa lista de caminhos, os que são `.env` ou certificado (`.pfx`, `.p12`, `.pem`). `scripts/checar_segredos.py` aplica isso a `git ls-files` (G-4, INV-03).
 - `src/dps.py`: `Prestador`, `Tomador`, `Servico`, `Valores`, `Dps`; `gerar_id`; `para_xml` (sem assinatura); `localizar_xsd_dps`; `validar_xml`.
 - `src/xsd.py`: `remover_ancoras`, `dir_local`, `preparar_copia_local`. Gera `schemas/<versão>-local/` (ignorada no git) a partir dos oficiais, tirando só `^` inicial e `$` final dos `xs:pattern`; recusa escrever na pasta de origem (DEC-003).
 - `scripts/preparar_xsd.py`: gera a cópia local sob demanda. `scripts/gerar_dps.py` a regenera a cada execução e valida contra ela.
@@ -80,8 +82,8 @@ Aprovados pelo humano em 2026-10-07 (DEC-004).
 | ID | Statement | Enforced by |
 |---|---|---|
 | INV-01 | Os schemas oficiais em `schemas/1.01` nunca são editados | G-3 (`git diff --exit-code main -- schemas/1.00 schemas/1.01`) |
-| INV-02 | O ambiente padrão é homologação, e `producao` é recusado pelo código enquanto durar a PoC | Pendente: T-008 (hoje `config.py` tem o default, mas ainda aceita `producao`) |
-| INV-03 | Certificados e senhas nunca vão ao git | `.gitignore` (`.env`, `certs/`, `*.pfx`, `*.p12`, `*.pem`); gate pendente: T-008 |
+| INV-02 | O ambiente padrão é homologação, e `producao` é recusado pelo código enquanto durar a PoC | `test_sem_variaveis_o_ambiente_e_homologacao` e `test_producao_e_recusado` (`tests/test_config.py`), em G-1. A trava está em `carregar_config()`; ver o limite registrado na DEC-010 |
+| INV-03 | Certificados e senhas nunca vão ao git | `.gitignore` (`.env`, `certs/`, `*.pfx`, `*.p12`, `*.pem`) e G-4, que falha se algum desses arquivos estiver rastreado |
 | INV-04 | O `Id` da DPS é `DPS` + 42 dígitos (45 posições): município (7) + tipo de inscrição federal (1) + inscrição federal (14) + série (5) + número da DPS (15) | `test_id_tem_45_caracteres_e_composicao_correta` |
 
 ## §5 Interfaces and frozen areas
@@ -136,7 +138,7 @@ Todas as checagens "no XSD" valem para os arquivos locais, e dependem do item de
 ## §7 Security and secrets
 
 - Segredos vêm de `.env` (ignorado no git) via `python-dotenv`: `NFSE_CERT_PATH`, `NFSE_CERT_PASSWORD`.
-- Ambientes: `homologacao` (default; "produção restrita") e `producao`. `producao` é um valor aceito por `config.py`; não há trava além do default.
+- Ambientes: `homologacao` (default; "produção restrita") e `producao`. `carregar_config()` recusa `producao` com `ValueError` enquanto durar a PoC (INV-02, T-008).
 - Nenhum segredo encontrado no histórico: `git ls-files` não contém `.env`, `.pfx`, `.p12` nem `.pem`.
 - **Observação**: existe `certs/lika-2026.pfx` (8.719 bytes, ignorado no git) e o `.env` local tem `NFSE_CERT_PATH` apontando para ele e `NFSE_CERT_PASSWORD` preenchida. O contexto da conversa dizia que ainda não há certificado A1. Não abri o arquivo nem li a senha. Ver Q-03.
 - Modelo de confiança, uso de certificado de terceiro e tratamento de dados pessoais (CNPJ/CPF de tomadores em `out/`): não definidos; Q-03.
@@ -159,6 +161,7 @@ Copy-Item .env.example .env
 | G-1 | Testes | `.\.venv\Scripts\python.exe -m pytest -q -rs` | Toda task |
 | G-2 | Verificação do projeto: gerar e validar a DPS | `.\.venv\Scripts\python.exe scripts\gerar_dps.py` (sucesso = código de saída 0) | Toda task |
 | G-3 | XSDs oficiais intocados | `git diff --exit-code main -- schemas/1.00 schemas/1.01` | Toda task |
+| G-4 | Nenhum segredo rastreado (`.env`, `*.pfx`, `*.p12`, `*.pem`) | `.\.venv\Scripts\python.exe scripts\checar_segredos.py` (sucesso = código de saída 0) | Toda task |
 | – | Formatação | inexistente | proposta em T-003 |
 | – | Lint com avisos como erro | inexistente | proposta em T-003 |
 | – | Instalação travada / build | inexistente | proposta em T-002 |
@@ -185,6 +188,13 @@ G-2 depende do `.env` local (`NFSE_XSD_DIR=schemas/1.01`). Com o `.env.example` 
 ### Fechamento da T-001 (2026-10-07, mesma branch)
 
 Reexecutados antes e depois de atualizar o spec e as fontes com a documentação de `docs/referencia/`, com o mesmo resultado: G-1 `26 passed`, nenhum pulado; G-2 código de saída 0, `[OK] Válida contra DPS_v1.01.xsd`; G-3 sem diferenças.
+
+### Depois de T-008 (2026-10-07, branch `t-008-production-lock-and-secrets-gate`)
+
+- G-1: `44 passed`, nenhum pulado (18 testes novos em `tests/test_config.py` e `tests/test_segredos.py`).
+- G-2: código de saída 0. Com `NFSE_AMBIENTE=producao`, sai com código 1 e `ValueError` citando INV-02 e DEC-002 (executado).
+- G-3: sem diferenças.
+- G-4 (novo): código de saída 0, nenhum `.env` ou certificado entre os arquivos rastreados.
 
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
@@ -214,7 +224,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-004 | Certificado A1: carregar PFX (`certificado.py`) | T-001, Q-03 | §7 | blocked (Q-03) | A definir com o humano |
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004, Q-06 | §5, §6 | todo | A definir; exige `[VERIFY]` do perfil de assinatura exigido pelo padrão nacional |
 | T-006 | Codec GZip+Base64 (`codec.py`) | T-001 | §5 | todo | A definir; ida e volta sem perda |
-| T-008 | Garantias de INV-02 e INV-03 | T-001 | §4, §7, §8 | todo | (1) `carregar_config()` sem variáveis de ambiente devolve `homologacao`; (2) `NFSE_AMBIENTE=producao` levanta erro claro citando DEC-002/INV-02; (3) gate novo em §8 que falha se `git ls-files` contiver `.env`, `*.pfx`, `*.p12` ou `*.pem`; (4) `.env.example` deixa de anunciar `producao` como opção |
+| T-008 | Garantias de INV-02 e INV-03 | T-001 | §4, §7, §8 | review | (1) `carregar_config()` sem variáveis de ambiente devolve `homologacao`; (2) `NFSE_AMBIENTE=producao` levanta erro claro citando DEC-002/INV-02; (3) gate novo em §8 que falha se `git ls-files` contiver `.env`, `*.pfx`, `*.p12` ou `*.pem`; (4) `.env.example` deixa de anunciar `producao` como opção |
 | T-009 | Remover `schemas/1.00` do repositório | T-001 | §5, §8 | todo | (1) `schemas/1.00/` removido do git; (2) G-3 passa a conferir só `schemas/1.01`; (3) `schemas/LEIAME.md` e `docs/SOURCES.md` coerentes com a remoção; (4) G-1 e G-2 continuam passando |
 | T-010 | `totTrib` para emitente ME/EPP (E0712) | T-001, Q-13 | §5, §6 | todo | (1) com `op_simp_nac=3` o XML não contém `indTotTrib` e emite outra opção da escolha `totTrib` (qual: Q-13); (2) para não optante o XML continua válido; (3) os dois casos válidos contra a cópia local dos XSDs; (4) teste negativo: a combinação ME/EPP + `indTotTrib` não é gerada |
 | T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006, T-010 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
@@ -232,6 +242,7 @@ Estado ao fim da sessão de 2026-10-07, para continuar em outra máquina:
 - T-000 e T-001 marcadas `done` pelo humano na conversa de 2026-10-07 (status transcrito pelo agente a pedido dele). As branches ainda não foram mescladas em `main`.
 - Atualização em T-011 (2026-10-07): T-000 e T-001 entraram em `main` pela PR #1, com squash, no commit `65c2e9b`. As branches `t-000-spec` e `t-001-validacao-serie-xsd` ficaram obsoletas. Próxima task pela ordem da DEC-009: T-008. Open questions sem resposta: Q-05 a Q-10, Q-12 e Q-13; parciais: Q-03 e Q-11.
 - T-011 entrou em `main` pela PR #2 (`b9c6e52`) e foi marcada `done` pelo humano na conversa de 2026-10-07 (transcrito pelo agente, DEC-007).
+- T-008 em `review` na branch `t-008-production-lock-and-secrets-gate`. Próxima pela DEC-009: T-002, que depende de Q-05; se Q-05 seguir aberta, T-009.
 - Não viajam pelo git e precisam ser recriados na outra máquina: `.venv`, `.env` (copiar de `.env.example`), `certs/*.pfx` e a senha, chave SSH, `git config user.name`/`user.email`, `docs/referencia/`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
 
 ## §10 Decision log
@@ -289,6 +300,12 @@ Context: pela regra do `CLAUDE.md` (menor ID elegível) a próxima task seria T-
 Decision: do humano, no plano aprovado em 2026-10-07: T-008, T-002, T-009, T-003, T-010, T-006, T-004, T-005, T-007. Uma task bloqueada por open question espera, e segue a próxima da lista. T-011 foi feita antes de todas, a pedido do humano.
 Alternatives: seguir o menor ID elegível (rejeitado: deixaria a trava de `producao` para depois).
 Consequences: §9. A ordem vale até o humano nomear outra task.
+
+### DEC-010: Trava de `producao` em `carregar_config()` e G-4 como script (2026-10-07, T-008)
+Context: INV-02 e INV-03 estavam aprovados sem garantia em código. Os acceptance criteria da T-008 pedem a recusa de `NFSE_AMBIENTE=producao` e um gate que falhe se o git rastrear `.env` ou certificado.
+Decision: do agente (escolhas de implementação): a recusa fica em `carregar_config()`, antes da checagem de valor desconhecido, com mensagem que cita INV-02 e DEC-002. O gate é `scripts/checar_segredos.py`, casca fina sobre `src/segredos.py` (mesmo desenho de `preparar_xsd.py` sobre `src/xsd.py`), para a regra ser testável sem depender do git. Casa `.env` pelo nome exato do arquivo e as extensões sem diferenciar maiúsculas; `.env.example` passa.
+Alternatives: um comando `git ls-files` direto em §8 (rejeitado: sintaxe diferente em PowerShell e bash, e sem teste); um hook de pre-commit (rejeitado: seria ferramenta nova, item de "perguntar"); remover `producao` de `TP_AMB` (rejeitado: o mapeamento 1 = produção é um fato do leiaute, e a mensagem de erro específica é mais clara).
+Consequences: §3, §4, §7, §8. Limite: a trava cobre o caminho de configuração. `Dps(tp_amb=1)` ainda pode ser construída por chamada direta, porque o modelo aceita os dois valores do leiaute; nada transmite hoje, e a T-007 deve obter o ambiente só de `Config`. G-4 olha os arquivos rastreados agora, não o histórico de commits.
 
 ## §11 Open questions
 
