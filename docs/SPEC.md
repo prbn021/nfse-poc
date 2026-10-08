@@ -295,7 +295,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-000 | Bootstrap: spec, fontes e baseline | – | CLAUDE.md | done | `docs/SPEC.md` e `docs/SOURCES.md` no branch `t-000-spec`; baseline de G-1 e G-2 registrado; humano escreve `Approved:` em §0 |
 | T-001 | Validação offline da DPS falha no padrão de `serie` | T-000, Q-01, Q-04 | §4, §5, §6, §8 | done | (1) G-2 sai com código 0 e imprime `[OK] Válida`; (2) `test_xml_valido_contra_xsd_oficial` deixa de ser pulado e passa; (3) `git diff main -- schemas/1.00 schemas/1.01` vazio; (4) teste negativo: `serie` inválida (ex.: `abc`, 6 dígitos) continua rejeitada pelo esquema usado na validação; (5) se houver cópia derivada: é regenerável por script, ignorada no git, e um teste garante que ela difere dos oficiais só nas âncoras `^`/`$` de início e fim de `xs:pattern` (hoje, 1 linha); (6) `.env.example` e o default de `NFSE_XSD_DIR` coerentes com o local real dos XSDs |
 | T-002 | Fixar toolchain e dependências | T-000 | §6, §8 | done | Versão do Python fixada; dependências com versões exatas e lock; instalação travada documentada em §8 e funcionando em checkout limpo. Ferramenta de lock: pip-tools (Q-05, DEC-011) |
-| T-003 | Gates de formatação e lint com ruff, e CI em Windows | T-000 | §6, §8 | review | (1) as regras do ruff são apresentadas ao humano e aprovadas antes de qualquer instalação; (2) ruff com versão exata em `requirements-dev.in` e nos locks; (3) dois gates novos em §8, formatação e lint com avisos como erro, passando no código existente; (4) workflow do GitHub Actions em `windows-latest` que faz a instalação travada (G-5) e roda os gates em toda PR; (5) nenhuma mudança de comportamento: G-1 e G-2 com o mesmo resultado (DEC-012) |
+| T-003 | Gates de formatação e lint com ruff, e CI em Windows | T-000 | §6, §8 | done | (1) as regras do ruff são apresentadas ao humano e aprovadas antes de qualquer instalação; (2) ruff com versão exata em `requirements-dev.in` e nos locks; (3) dois gates novos em §8, formatação e lint com avisos como erro, passando no código existente; (4) workflow do GitHub Actions em `windows-latest` que faz a instalação travada (G-5) e roda os gates em toda PR; (5) nenhuma mudança de comportamento: G-1 e G-2 com o mesmo resultado (DEC-012) |
 | T-004 | Certificado A1: carregar PFX (`certificado.py`) | T-001, T-019 | §3, §4, §7 | todo | (1) carrega um PFX com senha e expõe certificado e chave privada; (2) os testes usam um PFX autoassinado gerado por eles, nunca o do cliente; (3) senha errada, arquivo ausente e arquivo que não é PFX geram erro claro; (4) teste de INV-05: a senha e a chave não aparecem em `repr`, em mensagem de erro nem em log; (5) `certificado.py` recebe caminho e senha como argumentos, sem certificado global; um script manual abre o certificado do emitente indicado e mostra só titular, CNPJ e validade; (6) `cryptography` com versão exata e lock; (7) B-1 a B-3 respeitadas (DEC-014) |
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004 | §5, §6 | todo | A definir com o humano depois de fechar o `[VERIFY]` do perfil de assinatura do padrão nacional (§6). Já decidido: signxml, se atender ao perfil; se não atender, voltar ao humano (DEC-015). Testes só com certificado autoassinado |
 | T-006 | Codec GZip+Base64 (`codec.py`) | T-001 | §5 | todo | (1) codificar: XML em bytes → GZip → Base64 em texto; (2) decodificar faz o inverso e devolve os mesmos bytes, com teste de ida e volta sobre entradas variadas; (3) entrada que não é Base64 ou GZip válido gera erro claro; (4) a saída é lida pelo `gzip` da biblioteca padrão; (5) só biblioteca padrão, sem dependência nova. Aprovados pelo humano em 2026-10-08 |
@@ -323,10 +323,8 @@ Estado ao fim da sessão de 2026-10-08. Para retomar com o agente: pedir que lei
 
 **Onde o trabalho parou**
 
-- `main` está em `914ead3` e contém T-000, T-001, T-002, T-008, T-009, T-011, T-012, T-013 e T-017, todas `done`. T-017 entrou pela PR #8 e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
-- T-003 (ruff e CI em Windows) está em `review` na branch `t-003-ruff-and-ci`. A PR está aberta e a CI passou. Falta o humano mesclar com squash e pedir o `done`:
-  - link: `https://github.com/prbn021/nfse-poc/compare/main...t-003-ruff-and-ci?expand=1`
-  - título: `T-003: add ruff format and lint gates and a Windows CI workflow`
+- `main` está em `3e87c5f` e contém T-000, T-001, T-002, T-003, T-008, T-009, T-011, T-012, T-013 e T-017, todas `done`. T-003 entrou pela PR #9, com a CI passando na PR e em `main`, e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
+- Nenhuma task em andamento. A branch `t-016-boundaries-test` existe só com o commit que marca a T-003 como `done`; a T-016 (teste das boundaries de §3) ainda não foi começada e é a próxima.
 
 **Para preparar uma máquina**
 
@@ -370,6 +368,7 @@ Registro das atualizações anteriores, em ordem. O estado atual é o da seção
 - 2026-10-08: T-013 entrou em `main` pela PR #7 (`422aec0`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). T-017 em `review` na branch `t-017-version-official-docs`. Próxima pela ordem: T-003.
 - 2026-10-08: T-017 entrou em `main` pela PR #8 (`914ead3`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007).
 - 2026-10-08: T-003 em `review` na branch `t-003-ruff-and-ci`, com as regras do ruff aprovadas pelo humano na conversa. Próxima pela ordem: T-016.
+- 2026-10-08: T-003 entrou em `main` pela PR #9 (`3e87c5f`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). Fim da sessão: branch `t-016-boundaries-test` aberta, T-016 não começada.
 
 ## §10 Decision log
 
