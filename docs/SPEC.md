@@ -49,7 +49,7 @@ O projeto hoje pode afirmar apenas:
 | Gera um XML de DPS a partir de dataclasses | `src/dps.py`, `tests/test_dps.py` (5 testes passam) |
 | O XML de exemplo é válido contra uma cópia local do `DPS_v1.01.xsd` que difere do oficial em uma linha (âncoras do padrão de `serie`) | G-2; `tests/test_xsd.py` (DEC-003) |
 
-Não pode afirmar: que emite NFS-e, que assina, que transmite, que é "válido contra o XSD oficial" sem ressalva, que o servidor aceita a DPS (a DPS de exemplo passa no XSD mas viola a regra E0712 do Anexo I e seria rejeitada; ver T-010), nem qualquer termo da lista do `CLAUDE.md` ("seguro", "pronto para produção" etc.). O `README.md` é um brainstorming e não faz claims desse tipo.
+Não pode afirmar: que emite NFS-e, que assina, que transmite, que é "válido contra o XSD oficial" sem ressalva, que o servidor aceita a DPS (a DPS de exemplo passa no XSD mas viola a regra E0712 do Anexo I e seria rejeitada; ver T-010), nem qualquer termo da lista do `CLAUDE.md` ("seguro", "pronto para produção" etc.). O `README.md` descreve o que existe e o que não existe nos mesmos termos desta seção (T-012); o brainstorming inicial ficou no fim dele, marcado como histórico.
 
 ## §3 Architecture
 
@@ -218,6 +218,11 @@ Reexecutados antes e depois de atualizar o spec e as fontes com a documentação
 - G-3 passou a conferir só `schemas/1.01` (DEC-005, critério 2 da T-009): sem diferenças. Com o comando antigo ele acusaria a remoção de `schemas/1.00`, que é o objetivo da task.
 - G-1: `52 passed`, nenhum pulado (1 teste novo: só a versão 1.01 existe em `schemas/`). G-2: código de saída 0. G-4: código de saída 0.
 
+### Depois de T-012 (2026-10-08, branch `t-012-readme-setup-and-test`)
+
+- Só `README.md` e `docs/SPEC.md` mudaram. G-1: `52 passed`, nenhum pulado. G-2: código de saída 0. G-3: sem diferenças. G-4: código de saída 0.
+- Os comandos de preparação do README foram executados no `.venv` do projeto, recriado pelo humano com `py -3.11 -m venv` nesta data: G-5 código de saída 0. Não foram repetidos num clone novo.
+
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
 1. **Norma.** XML Schema Part 2, Apêndice F: as expressões regulares são ancoradas implicitamente no início e no fim; `^` e `$` não são metacaracteres (`^` só tem papel especial dentro de `[...]`). Num `xs:pattern`, portanto, são caracteres literais.
@@ -247,42 +252,39 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004, Q-06 | §5, §6 | todo | A definir; exige `[VERIFY]` do perfil de assinatura exigido pelo padrão nacional |
 | T-006 | Codec GZip+Base64 (`codec.py`) | T-001 | §5 | todo | A definir; ida e volta sem perda |
 | T-008 | Garantias de INV-02 e INV-03 | T-001 | §4, §7, §8 | done | (1) `carregar_config()` sem variáveis de ambiente devolve `homologacao`; (2) `NFSE_AMBIENTE=producao` levanta erro claro citando DEC-002/INV-02; (3) gate novo em §8 que falha se `git ls-files` contiver `.env`, `*.pfx`, `*.p12` ou `*.pem`; (4) `.env.example` deixa de anunciar `producao` como opção |
-| T-009 | Remover `schemas/1.00` do repositório | T-001 | §5, §8 | review | (1) `schemas/1.00/` removido do git; (2) G-3 passa a conferir só `schemas/1.01`; (3) `schemas/LEIAME.md` e `docs/SOURCES.md` coerentes com a remoção; (4) G-1 e G-2 continuam passando |
+| T-009 | Remover `schemas/1.00` do repositório | T-001 | §5, §8 | done | (1) `schemas/1.00/` removido do git; (2) G-3 passa a conferir só `schemas/1.01`; (3) `schemas/LEIAME.md` e `docs/SOURCES.md` coerentes com a remoção; (4) G-1 e G-2 continuam passando |
 | T-010 | `totTrib` para emitente ME/EPP (E0712) | T-001, Q-13 | §5, §6 | todo | (1) com `op_simp_nac=3` o XML não contém `indTotTrib` e emite outra opção da escolha `totTrib` (qual: Q-13); (2) para não optante o XML continua válido; (3) os dois casos válidos contra a cópia local dos XSDs; (4) teste negativo: a combinação ME/EPP + `indTotTrib` não é gerada |
 | T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006, T-010 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
 | T-011 | Termos do `CLAUDE.md` em inglês e regras básicas do projeto | T-001 | CLAUDE.md, §0, §9, §10 | done | (1) títulos de seção, colunas e termos do spec em inglês, conforme DEC-006; (2) §0 com as regras de idioma, de `Approved`/`done` e de PR e merge; (3) DEC-006 a DEC-009 registradas; (4) nenhum arquivo fora de `docs/` alterado; (5) G-1 a G-3 passam |
+| T-012 | README: como preparar, rodar e testar | T-002, T-009 | §2, §8 | review | (1) o `README.md` traz os comandos de preparação (instalação travada, G-5), execução e teste, iguais aos de §8; (2) cobre os erros que o humano encontrou em 2026-10-08 (`No module named pytest` por instalar só o `requirements.txt`; caminho de script incompleto); (3) nenhum claim além dos de §2; (4) o brainstorming anterior é mantido, marcado como histórico; (5) só `README.md` e `docs/` mudam; (6) G-1 a G-4 passam |
 
 ### Ponto de retomada (2026-10-08)
 
-Estado ao fim da sessão de 2026-10-08, para continuar em outra máquina. Para retomar com o agente: pedir que leia o `CLAUDE.md` e este ponto de retomada.
+Estado ao fim da sessão de 2026-10-08. Para retomar com o agente: pedir que leia o `CLAUDE.md` e este ponto de retomada.
 
 **Onde o trabalho parou**
 
-- `main` está em `427d47c` e contém T-000, T-001, T-011, T-008 e T-002, todas `done`.
-- T-009 (remover `schemas/1.00`) está em `review` na branch `t-009-remove-schemas-1-00`, publicada em `origin`. Esta atualização do spec também está nessa branch. Falta o humano abrir a PR, mesclar com squash e pedir o `done`:
-  - link: `https://github.com/prbn021/nfse-poc/compare/main...t-009-remove-schemas-1-00?expand=1`
-  - título: `T-009: remove the unused schemas/1.00 directory`
-- T-002 marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
+- `main` está em `88af46e` e contém T-000, T-001, T-011, T-008, T-002 e T-009, todas `done`. T-009 entrou pela PR #5 e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
+- T-012 (README: preparar, rodar e testar) está em `review` na branch `t-012-readme-setup-and-test`. Falta o humano abrir a PR, mesclar com squash e pedir o `done`:
+  - link: `https://github.com/prbn021/nfse-poc/compare/main...t-012-readme-setup-and-test?expand=1`
+  - título: `T-012: document setup, run and test in the README`
 
-**Primeiros passos na outra máquina**
+**Para preparar uma máquina**
 
-1. Clonar ou atualizar o repositório. Se a PR da T-009 ainda não foi mesclada, mesclar antes de abrir outra branch (DEC-008: cada task parte de `main` atualizado).
-2. Instalar o Python 3.11 e recriar o `.venv` com a instalação travada de §8 (G-5).
-3. `Copy-Item .env.example .env`. Para os gates não é preciso preencher certificado nem senha.
-4. Rodar G-1 a G-4 e conferir com "Depois de T-009" em §8 (`52 passed`).
-5. Não viajam pelo git e precisam ser levados à mão, se forem necessários: `certs/*.pfx` e a senha, `docs/referencia/` (documentação oficial e a nota de exemplo, que tem dados reais), chave SSH, `git config user.name`/`user.email`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
-6. Se a máquina não tiver o `gh`, as PRs continuam sendo abertas pela interface do GitHub, com link, título e descrição entregues pelo agente.
+1. Seguir "Preparar o ambiente" do `README.md` (instalação travada, G-5) e rodar G-1 a G-4.
+2. Não viajam pelo git e precisam ser levados à mão, se forem necessários: `certs/*.pfx` e a senha, `docs/referencia/` (documentação oficial e a nota de exemplo, que tem dados reais), chave SSH, `git config user.name`/`user.email`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
+3. Se a máquina não tiver o `gh`, as PRs são abertas pela interface do GitHub, com link, título e descrição entregues pelo agente.
 
 **Próxima task e o que está pendente para ela**
 
 - Pela ordem da DEC-009, a próxima é **T-003** (proposta de gates de formatação e lint). Ela depende do resto de Q-05, ainda sem resposta do humano: usar ruff como formatador e linter? criar CI no GitHub Actions? Recomendação do agente, não decidida: ruff com CI. Uma CI em Linux exige gerar um lock de dependências para essa plataforma (DEC-011). A T-003 é uma proposta: nada é instalado sem aprovação.
 - Depois, na ordem: **T-010** (bloqueada por Q-13), **T-006** (sem bloqueio, mas com acceptance criteria "a definir" com o humano), **T-004** (bloqueada por Q-03 a/b), **T-005** (Q-06), **T-007**.
-- Open questions sem resposta: Q-06, Q-07, Q-08, Q-09, Q-10, Q-12, Q-13. Parciais: Q-03, Q-05, Q-11.
+- Open questions sem resposta: Q-06, Q-07, Q-08, Q-10, Q-12, Q-13. Parciais: Q-03, Q-05, Q-09, Q-11.
 - `[VERIFY]` abertos em §6: formato de `serie` no XML, URL base da SEFIN, procedência dos XSDs, demais regras de negócio do Anexo I.
 
 **Outros**
 
-- As branches `t-002-pin-toolchain-and-deps`, `t-008-production-lock-and-secrets-gate` e `t-011-spec-terms-and-rules` já foram mescladas e continuam em `origin` por escolha do humano.
+- As branches já mescladas (`t-002-…`, `t-008-…`, `t-009-…`, `t-011-…`) continuam em `origin` por escolha do humano.
 - Regras de trabalho em §0: commits, PRs e branches em inglês; uma PR por task com squash; `done` só a pedido explícito.
 
 ### Histórico do ponto de retomada (2026-10-07 e 2026-10-08)
@@ -302,6 +304,7 @@ Registro das atualizações anteriores, em ordem. O estado atual é o da seção
 - 2026-10-08: T-008 marcada `done` pelo humano na conversa (transcrito pelo agente, DEC-007). T-002 entrou em `main` pela PR #4 (`427d47c`) e continua em `review` no quadro até o humano pedir o `done`.
 - T-009 em `review` na branch `t-009-remove-schemas-1-00`. Próxima pela DEC-009: T-003 (proposta de formatação, lint e CI), que precisa do resto de Q-05.
 - Não viajam pelo git e precisam ser recriados na outra máquina: `.venv`, `.env` (copiar de `.env.example`), `certs/*.pfx` e a senha, chave SSH, `git config user.name`/`user.email`, `docs/referencia/`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
+- 2026-10-08: T-009 entrou em `main` pela PR #5 (`88af46e`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). T-012 criada a pedido do humano, depois de ele instalar só o `requirements.txt` e ficar sem o pytest; feita em branch própria depois do merge da T-009, por escolha dele.
 
 ## §10 Decision log
 
@@ -383,7 +386,7 @@ Consequences: §6, §8 (G-5), §9, §11. Os locks valem para Windows com Python 
 | Q-06 | Bibliotecas: nfelib só para bindings da DPS, ou manter o modelo próprio? Assinatura: signxml ou lxml+xmlsec? HTTP: httpx ou requests? | T-005, T-007 |
 | Q-07 | Escopo e milestones: M1–M3 de §9 estão certos? Os passos 4 e 5 do README (decodificar retorno; consulta por chave e DANFSe) entram nesta fase? Critério de sucesso de M1 proposto: "G-1 e G-2 passam, com o teste de XSD rodando". | planejamento |
 | Q-08 | Boundaries de §3. Proposta: `src/dps.py` não depende de rede nem de certificado; só `client.py` faz I/O de rede; `scripts/` depende de `src/`, nunca o contrário. | T-004 em diante |
-| Q-09 | Conflitos com o README: cita pydantic (contra DEC-001) e é um brainstorming, não uma descrição do projeto. Atualizar numa task própria? | – |
+| Q-09 | **Parcial em 2026-10-08:** o README ganhou as seções de uso (T-012) e o brainstorming ficou no fim, marcado como histórico, com a ressalva de pydantic. Segue aberto se o brainstorming deve ser reescrito ou removido. Texto original: Conflitos com o README: cita pydantic (contra DEC-001) e é um brainstorming, não uma descrição do projeto. Atualizar numa task própria? | – |
 | Q-10 | Licença: não há `LICENSE`. O remoto é `github.com/prbn021/nfse-poc`; se for público, o repositório redistribui os XSDs oficiais. Qual licença, e os XSDs podem ficar versionados? | cópia de código de terceiros |
 | Q-11 | **Parcial em 2026-10-07:** o defeito do XSD fica só registrado no spec (§8, DEC-003), sem reporte. O formato segue aberto: o Anexo I diz apenas "numérico, tamanho 1-5"; confirmar na primeira transmissão em produção restrita. Texto original: Formato de `serie` no XML ("1" ou "00001") e a quem reportar o defeito do padrão no XSD oficial (se quiser reportar). | T-007 |
 | Q-12 | Restringir `serie` no modelo a 1–49999? O Anexo I reserva essa faixa ao aplicativo próprio e rejeita o resto com E0010; `Dps` hoje aceita até 99999. | – |
