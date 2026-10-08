@@ -6,3 +6,5 @@ certs/
 __pycache__/
 .venv/
 out/
+schemas/*-local/
+docs/referencia/

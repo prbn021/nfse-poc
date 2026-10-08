@@ -38,5 +38,5 @@ def carregar_config() -> Config:
         cert_password=os.getenv("NFSE_CERT_PASSWORD", ""),
         sefin_url=os.getenv("NFSE_SEFIN_URL", "").rstrip("/"),
         adn_url=os.getenv("NFSE_ADN_URL", "").rstrip("/"),
-        xsd_dir=RAIZ / os.getenv("NFSE_XSD_DIR", "schemas"),
+        xsd_dir=RAIZ / os.getenv("NFSE_XSD_DIR", "schemas/1.01"),
     )
