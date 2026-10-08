@@ -218,7 +218,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-009 | Remover `schemas/1.00` do repositório | T-001 | §5, §8 | todo | (1) `schemas/1.00/` removido do git; (2) G-3 passa a conferir só `schemas/1.01`; (3) `schemas/LEIAME.md` e `docs/SOURCES.md` coerentes com a remoção; (4) G-1 e G-2 continuam passando |
 | T-010 | `totTrib` para emitente ME/EPP (E0712) | T-001, Q-13 | §5, §6 | todo | (1) com `op_simp_nac=3` o XML não contém `indTotTrib` e emite outra opção da escolha `totTrib` (qual: Q-13); (2) para não optante o XML continua válido; (3) os dois casos válidos contra a cópia local dos XSDs; (4) teste negativo: a combinação ME/EPP + `indTotTrib` não é gerada |
 | T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006, T-010 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
-| T-011 | Termos do `CLAUDE.md` em inglês e regras básicas do projeto | T-001 | CLAUDE.md, §0, §9, §10 | review | (1) títulos de seção, colunas e termos do spec em inglês, conforme DEC-006; (2) §0 com as regras de idioma, de `Approved`/`done` e de PR e merge; (3) DEC-006 a DEC-009 registradas; (4) nenhum arquivo fora de `docs/` alterado; (5) G-1 a G-3 passam |
+| T-011 | Termos do `CLAUDE.md` em inglês e regras básicas do projeto | T-001 | CLAUDE.md, §0, §9, §10 | done | (1) títulos de seção, colunas e termos do spec em inglês, conforme DEC-006; (2) §0 com as regras de idioma, de `Approved`/`done` e de PR e merge; (3) DEC-006 a DEC-009 registradas; (4) nenhum arquivo fora de `docs/` alterado; (5) G-1 a G-3 passam |
 
 ### Ponto de retomada (2026-10-07)
 
@@ -231,6 +231,7 @@ Estado ao fim da sessão de 2026-10-07, para continuar em outra máquina:
 - Atualização no fechamento da T-001 (2026-10-07): a documentação oficial e a nota de exemplo já estão em `docs/referencia/` (ignorada no git). Com ela foram fechados o Tipo de Inscrição Federal do `Id` e a faixa de `serie`, e registradas as rotas da SEFIN e as regras de recepção (§6, `docs/SOURCES.md`). Seguem abertos: formato de `serie` no XML, URL base da SEFIN, procedência dos XSDs. Lacuna nova: E0712 (T-010). Open questions novas: Q-12 e Q-13. Os dados reais do prestador ainda não foram montados em arquivo local.
 - T-000 e T-001 marcadas `done` pelo humano na conversa de 2026-10-07 (status transcrito pelo agente a pedido dele). As branches ainda não foram mescladas em `main`.
 - Atualização em T-011 (2026-10-07): T-000 e T-001 entraram em `main` pela PR #1, com squash, no commit `65c2e9b`. As branches `t-000-spec` e `t-001-validacao-serie-xsd` ficaram obsoletas. Próxima task pela ordem da DEC-009: T-008. Open questions sem resposta: Q-05 a Q-10, Q-12 e Q-13; parciais: Q-03 e Q-11.
+- T-011 entrou em `main` pela PR #2 (`b9c6e52`) e foi marcada `done` pelo humano na conversa de 2026-10-07 (transcrito pelo agente, DEC-007).
 - Não viajam pelo git e precisam ser recriados na outra máquina: `.venv`, `.env` (copiar de `.env.example`), `certs/*.pfx` e a senha, chave SSH, `git config user.name`/`user.email`, `docs/referencia/`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
 
 ## §10 Decision log
