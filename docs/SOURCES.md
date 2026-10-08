@@ -38,7 +38,7 @@ Fatos externos checados e código copiado. "XSD local" significa os arquivos em 
 | 2026-10-08 | Assinatura da NFS-e devolvida pelo sistema nacional | `rsa-sha256`; digest `sha256`; `xml-exc-c14n#WithComments`; transformações `enveloped-signature` e `xml-exc-c14n#WithComments`; `X509Certificate` em `KeyInfo`; referência ao `Id` de `infNFSe` | Leiaute 1.01 | Mesmo arquivo. É a assinatura do sistema sobre a NFS-e, não a da DPS pelo contribuinte |
 | 2026-10-08 | `cTribMun`, `prest/fone`, `prest/email`, `tribFed`, `tribFed/piscofins` | Todos com ocorrência 0-1. Dentro de `piscofins`: `CST` 1-1, `tpRetPisCofins` 0-1. Regras: `cTribMun` informado precisa existir e ser administrado pelo município de incidência, exceto MEI (E0314); `email` com estrutura de e-mail (E0148); `tribFed` proibido para emitente pessoa física (E0675) | Anexo I v1.01 (2026-02-09) | Anexo I, abas `LEIAUTE DPS_NFS-e` (linhas 137, 138, 195, 312 a 320) e `RN DPS_NFS-e` (linhas 221, 222, 318, 514 a 523) |
 
-"Anexo I" é `docs/referencia/gov-docs/anexo_i-sefin_adn-dps_nfse-snnfse-v1-01-20260209.xlsx`; os manuais estão na mesma pasta. `docs/referencia/` é ignorada no git: os arquivos foram entregues pelo humano em 2026-10-07 e a URL de download de cada um não foi registrada. O manual do Emissor Público tem `v1-2-out2025` no nome do arquivo, mas o histórico de versões interno traz só "1.0, 17/03/2025".
+"Anexo I" é `docs/referencia/gov-docs/anexo_i-sefin_adn-dps_nfse-snnfse-v1-01-20260209.xlsx`; os manuais estão na mesma pasta, versionada desde a T-017 (2026-10-08). Os arquivos foram entregues pelo humano em 2026-10-07 e a URL de download de cada um não foi registrada. O manual do Emissor Público tem `v1-2-out2025` no nome do arquivo, mas o histórico de versões interno traz só "1.0, 17/03/2025".
 
 ### SHA-256 dos XSDs em `schemas/1.01` (primeiros 16 hex, 2026-10-07, commit `4abfc2c`)
 
@@ -55,7 +55,29 @@ Fatos externos checados e código copiado. "XSD local" significa os arquivos em 
 | tiposSimples_v1.01.xsd | 830ea116c34d7310 |
 | xmldsig-core-schema.xsd | 49848f732663aecb |
 
+### SHA-256 dos documentos oficiais em `docs/referencia/gov-docs` (2026-10-08, T-017)
+
+Os valores completos estão em `docs/referencia/gov-docs/SHA256SUMS`, que `tests/test_gov_docs.py` confere.
+
+| Arquivo | SHA-256 (prefixo) |
+|---|---|
+| anexo-c-indop-ibscbs-snnfse-v1-01.xlsx | f59f066c5c3584ac |
+| anexo_a-municipio_ibge-paises_iso2-v1-00-snnfse-20251210.xlsx | 238b715ab2dcc2c9 |
+| anexo_b-nbs2-lista_servico_nacional-snnfse-v1-01-20260122.xlsx | e74b0be8ad204e45 |
+| anexo_i-sefin_adn-dps_nfse-snnfse-v1-01-20260209.xlsx | de5bc492959eadc8 |
+| anexo_ii-sefin_adn-pedregevt_evt-snnfse-v1-01-20260122.xlsx | 5abe83d7e51023ff |
+| anexo_iii-cnc-snnfse-v1-00-20251216.xlsx | dce1b5b49a0cce5b |
+| anexo_iv-adn-snnfse-v1-00-20251216.xlsx | fa778d0b6e58d62d |
+| anexo_v-painel_adm_municipal-snnfse-v1-00-20251216.xlsx | 74da67e240f80533 |
+| manual-contribuintes-apis-adn-sistema-nacional-nfse.pdf | 9ffc97d8b1be4c80 |
+| manual-contribuintes-emissor-publico-api-emissao-decisao-administrativa-e-judicial.pdf | f6d39849f57ed488 |
+| manual-contribuintes-emissor-publico-api-sistema-nacional-nfs-e-v1-2-out2025.pdf | ac2f36e34ff565cc |
+| manual-municipios-apis-adn-sistema-nacional-nfs-e-v1-2-out21025.pdf | 1e1463e68aa56dbd |
+| manual-municipios-cnc-api-sistema-nacional-nfs-e-v1-2-out21025.pdf | 378624952822e466 |
+| manual-municipios-emissor-publico-api-sistema-nacional-nfs-e-v1-2-out21025.pdf | 3b5e982be9298ecc |
+
 ## Copied code
 | Date       | Our path            | Origin (URL + commit) | License | Task  |
 |------------|---------------------|-----------------------|---------|-------|
 | (antes de 2026-10-07) | `schemas/1.01/*.xsd` (`schemas/1.00/*.xsd` veio do mesmo pacote e foi removido em 2026-10-08, T-009) | Pacote de schemas do Portal Nacional da NFS-e, segundo `schemas/LEIAME.md` (https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual). Data de download e versão do pacote não registradas. | CC BY-ND 3.0, declarada no rodapé da página de origem para o conteúdo do site (checado em 2026-10-08; SPEC DEC-018) | anterior ao Bootstrap |
+| 2026-10-08 (entregues em 2026-10-07) | `docs/referencia/gov-docs/*.xlsx` e `*.pdf` (8 anexos, 6 manuais) | Documentação técnica do Portal Nacional da NFS-e (https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual). URL de cada arquivo não registrada; não comparados com os publicados hoje. | CC BY-ND 3.0, declarada no rodapé da página de origem (checado em 2026-10-08; SPEC DEC-018, DEC-021) | T-017 |

@@ -82,8 +82,8 @@ As outras verificações que toda mudança precisa passar (lista completa em `do
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\gerar_dps.py          # sai com código 0
-git diff --exit-code main -- schemas/1.01                # sem saída: XSDs oficiais intocados
-.\.venv\Scripts\python.exe scripts\checar_segredos.py    # nenhum .env ou certificado no git
+git diff --exit-code main -- schemas/1.01 docs/referencia/gov-docs   # sem saída: XSDs e documentação oficial intocados
+.\.venv\Scripts\python.exe scripts\checar_segredos.py    # nenhum .env, certificado ou referência privada no git
 ```
 
 No PowerShell, `$LASTEXITCODE` mostra o código de saída do último comando.
