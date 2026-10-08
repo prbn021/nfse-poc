@@ -47,7 +47,7 @@ O projeto hoje pode afirmar apenas:
 | Gera um XML de DPS a partir de dataclasses | `src/dps.py`, `tests/test_dps.py` (5 testes passam) |
 | O XML de exemplo é válido contra uma cópia local do `DPS_v1.01.xsd` que difere do oficial em uma linha (âncoras do padrão de `serie`) | G-2; `tests/test_xsd.py` (DEC-003) |
 
-Não pode afirmar: que emite NFS-e, que assina, que transmite, que é "válido contra o XSD oficial" sem ressalva, que o servidor aceita a DPS, nem qualquer termo da lista do `CLAUDE.md` ("seguro", "pronto para produção" etc.). O `README.md` é um brainstorming e não faz alegações desse tipo.
+Não pode afirmar: que emite NFS-e, que assina, que transmite, que é "válido contra o XSD oficial" sem ressalva, que o servidor aceita a DPS (a DPS de exemplo passa no XSD mas viola a regra E0712 do Anexo I e seria rejeitada; ver T-010), nem qualquer termo da lista do `CLAUDE.md` ("seguro", "pronto para produção" etc.). O `README.md` é um brainstorming e não faz alegações desse tipo.
 
 ## §3 Arquitetura
 
@@ -118,15 +118,16 @@ Itens de verificação:
 
 | Item | Situação |
 |---|---|
-| Ordem e obrigatoriedade dos elementos da DPS | Parcial: o XML de exemplo valida sem erros contra o XSD v1.01 quando o padrão de `serie` é corrigido numa cópia (checado em 2026-10-07, diagnóstico de §8). Vale só para os elementos que o exemplo emite. `[VERIFY: regras de negócio de obrigatoriedade no manual/anexos, que o XSD não expressa]` |
+| Ordem e obrigatoriedade dos elementos da DPS | Parcial: o XML de exemplo valida sem erros contra o XSD v1.01 quando o padrão de `serie` é corrigido numa cópia (checado em 2026-10-07, diagnóstico de §8). Vale só para os elementos que o exemplo emite. Regras de negócio, parcial: o Anexo I (aba `RN DPS_NFS-e`) proíbe `indTotTrib` para emitente ME/EPP (E0712), e o código sempre o emite (checado em 2026-10-07; T-010). `[VERIFY: demais regras de negócio de obrigatoriedade do Anexo I, que o XSD não expressa; só foram lidas as dos campos que o exemplo emite]` |
 | `opSimpNac` | 1 Não Optante; 2 MEI; 3 ME/EPP (checado em 2026-10-07, `tiposSimples_v1.01.xsd`, `TSOpSimpNac`) |
 | `regEspTrib` | 0 Nenhum; 1 Ato Cooperado; 2 Estimativa; 3 Microempresa Municipal; 4 Notário ou Registrador; 5 Profissional Autônomo; 6 Sociedade de Profissionais; 9 Outros (checado em 2026-10-07, `TSRegEspTrib`) |
 | `tribISSQN` | 1 Operação tributável; 2 Imunidade; 3 Exportação de serviço; 4 Não Incidência (checado em 2026-10-07, `TSTribISSQN`) |
 | `tpRetISSQN` | 1 Não Retido; 2 Retido pelo Tomador; 3 Retido pelo Intermediário (checado em 2026-10-07, `TSTipoRetISSQN`) |
-| Composição do `Id` | "DPS" + Cód.Mun (7) + Tipo de Inscrição Federal (1) + Inscrição Federal (14; CPF com 000 à esquerda) + Série (5) + Núm. DPS (15) = 45 (checado em 2026-10-07, `TSIdDPS`). `[VERIFY: valores do Tipo de Inscrição Federal; o código fixa "2" para CNPJ]` |
-| URLs dos ambientes | `[VERIFY: URLs de SEFIN e ADN em produção restrita]`. `.env.example` traz `https://sefin.producaorestrita.nfse.gov.br` e `https://adn.producaorestrita.nfse.gov.br`, sem fonte |
+| Composição do `Id` | "DPS" + Cód.Mun (7) + Tipo de Inscrição Federal (1) + Inscrição Federal (14; CPF com 000 à esquerda) + Série (5) + Núm. DPS (15) = 45 (checado em 2026-10-07, `TSIdDPS`). Tipo de Inscrição Federal: 1 = CPF, 2 = CNPJ do emitente (checado em 2026-10-07, Anexo I v1.01, aba `LEIAUTE DPS_NFS-e`, campo `id`); o código fixa "2" e só aceita prestador com CNPJ |
+| URLs dos ambientes | Parcial: o host `adn.producaorestrita.nfse.gov.br` aparece no link do Swagger citado nos manuais dos contribuintes (checado em 2026-10-07; link não acessado). `[VERIFY: URL base da SEFIN em produção restrita e caminhos base das APIs]`. `.env.example` traz `https://sefin.producaorestrita.nfse.gov.br`, sem fonte. Rotas da SEFIN (`POST /nfse`, `GET /nfse/{chaveAcesso}`, `GET`/`HEAD /dps/{id}`): checadas em 2026-10-07, manual do Emissor Público |
 | Procedência dos XSDs | `[VERIFY: que os arquivos em schemas/1.01 são o pacote oficial vigente, sem alterações]`. `schemas/LEIAME.md` aponta a página de origem, mas não há data de download nem hash publicado |
-| Formato de `serie` no XML | `[VERIFY: se a série vai como "1" ou "00001"]`. O XSD aceita os dois; o `Id` usa 5 dígitos |
+| Formato de `serie` no XML | `[VERIFY: se a série vai como "1" ou "00001"]`. O XSD aceita os dois; o `Id` usa 5 dígitos. O Anexo I só diz "numérico, tamanho 1-5" e não resolve; confirmar na primeira transmissão (Q-11) |
+| Faixa de `serie` | 00001 a 49999 para aplicativo próprio; fora da faixa do emissor, rejeição E0010 (checado em 2026-10-07, Anexo I v1.01). O modelo hoje aceita 1 a 99999 (Q-12) |
 
 Todas as checagens "no XSD" valem para os arquivos locais, e dependem do item de procedência.
 
@@ -179,6 +180,10 @@ G-2 depende do `.env` local (`NFSE_XSD_DIR=schemas/1.01`). Com o `.env.example` 
 - G-2: código de saída 0, `[OK] Válida contra DPS_v1.01.xsd (cópia local em …\schemas.01-local)`. Também sai com 0 sem `.env` (executado), porque o default de `NFSE_XSD_DIR` passou a ser `schemas/1.01`.
 - G-3: sem diferenças.
 
+### Fechamento da T-001 (2026-10-07, mesma branch)
+
+Reexecutados antes e depois de atualizar o spec e as fontes com a documentação de `docs/referencia/`, com o mesmo resultado: G-1 `26 passed`, nenhum pulado; G-2 código de saída 0, `[OK] Válida contra DPS_v1.01.xsd`; G-3 sem diferenças.
+
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
 1. **Norma.** XML Schema Part 2, Apêndice F: as expressões regulares são ancoradas implicitamente no início e no fim; `^` e `$` não são metacaracteres (`^` só tem papel especial dentro de `[...]`). Num `xs:pattern`, portanto, são caracteres literais.
@@ -209,7 +214,8 @@ Portões de fase: nenhum definido; até lá, todo PR é um portão.
 | T-006 | Codec GZip+Base64 (`codec.py`) | T-001 | §5 | todo | A definir; ida e volta sem perda |
 | T-008 | Garantias de INV-02 e INV-03 | T-001 | §4, §7, §8 | todo | (1) `carregar_config()` sem variáveis de ambiente devolve `homologacao`; (2) `NFSE_AMBIENTE=producao` levanta erro claro citando DEC-002/INV-02; (3) portão novo em §8 que falha se `git ls-files` contiver `.env`, `*.pfx`, `*.p12` ou `*.pem`; (4) `.env.example` deixa de anunciar `producao` como opção |
 | T-009 | Remover `schemas/1.00` do repositório | T-001 | §5, §8 | todo | (1) `schemas/1.00/` removido do git; (2) G-3 passa a conferir só `schemas/1.01`; (3) `schemas/LEIAME.md` e `docs/SOURCES.md` coerentes com a remoção; (4) G-1 e G-2 continuam passando |
-| T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
+| T-010 | `totTrib` para emitente ME/EPP (E0712) | T-001, Q-13 | §5, §6 | todo | (1) com `op_simp_nac=3` o XML não contém `indTotTrib` e emite outra opção da escolha `totTrib` (qual: Q-13); (2) para não optante o XML continua válido; (3) os dois casos válidos contra a cópia local dos XSDs; (4) teste negativo: a combinação ME/EPP + `indTotTrib` não é gerada |
+| T-007 | Cliente mTLS e erros (`client.py`, `erros.py`) | T-004, T-005, T-006, T-010 | §6, §7 | todo | A definir; exige `[VERIFY]` de URLs e rotas; só produção restrita |
 
 ### Ponto de retomada (2026-10-07)
 
@@ -219,6 +225,7 @@ Estado ao fim da sessão de 2026-10-07, para continuar em outra máquina:
 - §11 respondidas: Q-01, Q-02, Q-04. Parcial: Q-03. Ainda não discutidas: Q-05 a Q-11, nessa ordem.
 - Tarefas criadas e não iniciadas: T-008 (trava de `producao` e portão de segredos), T-009 (remover `schemas/1.00`).
 - O humano já tem, fora do repositório: a documentação oficial (PDFs e planilhas) e uma nota fiscal antiga do cliente. Destino combinado: documentação em `docs/referencia/` (ignorada no git); nota fiscal em `certs/` ou `out/` (ignoradas), por conter dados reais. Com elas dá para fechar os `[VERIFY]` de §6 e montar os dados reais do prestador, que ficam em arquivo local fora do git, nunca no código nem nos testes.
+- Atualização no fechamento da T-001 (2026-10-07): a documentação oficial e a nota de exemplo já estão em `docs/referencia/` (ignorada no git). Com ela foram fechados o Tipo de Inscrição Federal do `Id` e a faixa de `serie`, e registradas as rotas da SEFIN e as regras de recepção (§6, `docs/SOURCES.md`). Seguem abertos: formato de `serie` no XML, URL base da SEFIN, procedência dos XSDs. Lacuna nova: E0712 (T-010). Perguntas novas: Q-12 e Q-13. Os dados reais do prestador ainda não foram montados em arquivo local.
 - Não viajam pelo git e precisam ser recriados na outra máquina: `.venv`, `.env` (copiar de `.env.example`), `certs/*.pfx` e a senha, chave SSH, `git config user.name`/`user.email`, `docs/referencia/`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
 
 ## §10 Registro de decisões
@@ -267,4 +274,6 @@ Consequences: §5, §9 (T-009), §11. Trocar a versão do layout da DPS passa a 
 | Q-08 | Fronteiras de §3. Proposta: `src/dps.py` não depende de rede nem de certificado; só `client.py` faz I/O de rede; `scripts/` depende de `src/`, nunca o contrário. | T-004 em diante |
 | Q-09 | Conflitos com o README: cita pydantic (contra DEC-001) e é um brainstorming, não uma descrição do projeto. Atualizar numa tarefa própria? | – |
 | Q-10 | Licença: não há `LICENSE`. O remoto é `github.com/prbn021/nfse-poc`; se for público, o repositório redistribui os XSDs oficiais. Qual licença, e os XSDs podem ficar versionados? | cópia de código de terceiros |
-| Q-11 | Formato de `serie` no XML ("1" ou "00001") e a quem reportar o defeito do padrão no XSD oficial (se quiser reportar). | T-001 (critério 1 independe) |
+| Q-11 | **Parcial em 2026-10-07:** o defeito do XSD fica só registrado no spec (§8, DEC-003), sem reporte. O formato segue aberto: o Anexo I diz apenas "numérico, tamanho 1-5"; confirmar na primeira transmissão em produção restrita. Texto original: Formato de `serie` no XML ("1" ou "00001") e a quem reportar o defeito do padrão no XSD oficial (se quiser reportar). | T-007 |
+| Q-12 | Restringir `serie` no modelo a 1–49999? O Anexo I reserva essa faixa ao aplicativo próprio e rejeita o resto com E0010; `Dps` hoje aceita até 99999. | – |
+| Q-13 | Emitente ME/EPP: (a) qual opção de `totTrib` emitir no lugar de `indTotTrib` (`pTotTribSN`, ou `vTotTrib`/`pTotTrib`)? (b) emitir `regApTribSN`, que o modelo hoje não tem? (c) o exemplo e os testes devem espelhar o perfil do cliente (ME/EPP, tomador pessoa física, sem inscrição municipal), sempre com dados fictícios (liga com Q-03b)? | T-010 |
