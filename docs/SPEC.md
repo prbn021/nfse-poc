@@ -75,6 +75,7 @@ scripts/gerar_dps.py ──> src/config.py  (lê .env via python-dotenv)
 scripts/preparar_xsd.py ─> src/config.py, src/xsd.py
 scripts/checar_segredos.py ─> src/segredos.py  (lê `git ls-files`)
 tests/ ────────────────> src/dps.py, src/xsd.py, src/config.py, src/segredos.py, docs/referencia/gov-docs (manifesto)
+tests/boundaries.py ───> lê o código de src/ como texto (não o importa)
 ```
 
 - `src/config.py`: `Config` imutável; `NFSE_AMBIENTE` tem default `homologacao` e `producao` levanta `ValueError` (INV-02); `tp_amb` 1=produção, 2=homologação.
@@ -91,7 +92,15 @@ Boundaries de dependência, aprovadas pelo humano em 2026-10-08 (DEC-017):
 - B-2: só `src/client.py` faz I/O de rede.
 - B-3: `scripts/` depende de `src/`; `src/` nunca depende de `scripts/`.
 
-Exceções permitidas: nenhuma. O código atual respeita as três (não há módulo de rede nem de certificado). Ainda não há teste que as confira: T-016.
+Exceções permitidas: nenhuma. O código atual respeita as três (não há módulo de rede nem de certificado).
+
+Conferidas em G-1 por `tests/test_boundaries.py`, que usa `tests/boundaries.py` para ler os `import` de todo `.py` sob `src/` (T-016, DEC-028):
+
+- B-1: `src/dps.py` não alcança, direto ou por outro módulo de `src/`, biblioteca de rede, módulo de certificado (`src/certificado.py`, `cryptography`, `OpenSSL`, `signxml`, `xmlsec`) nem `src/client.py`.
+- B-2: nenhum módulo de `src/` além de `src/client.py` importa biblioteca de rede. A lista de bibliotecas de rede é fechada e fica em `tests/boundaries.py`; uma biblioteca nova entra nela na task que a instalar.
+- B-3: nenhum módulo de `src/` importa `scripts`.
+
+Limites do teste: só vê `import` e `from ... import` escritos no código, não import por nome em texto (`importlib.import_module`); não olha `scripts/` (Q-19); não detecta I/O de rede feito sem importar uma biblioteca da lista.
 
 ## §4 Invariants
 
@@ -269,6 +278,12 @@ Reexecutados antes e depois de atualizar o spec e as fontes com a documentação
 - G-1: `64 passed`, nenhum pulado, antes e depois. G-2: código de saída 0, com saída idêntica antes e depois, fora a hora de emissão. G-3: sem diferenças. G-4: código de saída 0. G-5: código de saída 0 no `.venv` do projeto, com o lock novo.
 - CI: a primeira execução, na PR da task (commit `2e68931`, `windows-latest`), terminou com sucesso em todos os passos, incluindo a instalação travada e G-1 a G-7 (conferido em 2026-10-08 pela API pública do GitHub, execução 37842686635). A DEC-027 foi escrita antes disso e diz que a CI ainda não tinha sido vista rodando.
 
+### Depois de T-016 (2026-10-08, branch `t-016-boundaries-test`)
+
+- G-1: `100 passed`, nenhum pulado (36 testes novos em `tests/test_boundaries.py`). Antes da implementação, com `violacoes` devolvendo sempre a lista vazia, 27 deles falhavam por asserção.
+- G-2: código de saída 0. G-3: sem diferenças. G-4: código de saída 0, com 56 arquivos rastreados antes do commit da task. G-6 e G-7: código de saída 0.
+- Nenhum arquivo de `src/` ou de `scripts/` mudou.
+
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
 1. **Norma.** XML Schema Part 2, Apêndice F: as expressões regulares são ancoradas implicitamente no início e no fim; `^` e `$` não são metacaracteres (`^` só tem papel especial dentro de `[...]`). Num `xs:pattern`, portanto, são caracteres literais.
@@ -295,7 +310,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-000 | Bootstrap: spec, fontes e baseline | – | CLAUDE.md | done | `docs/SPEC.md` e `docs/SOURCES.md` no branch `t-000-spec`; baseline de G-1 e G-2 registrado; humano escreve `Approved:` em §0 |
 | T-001 | Validação offline da DPS falha no padrão de `serie` | T-000, Q-01, Q-04 | §4, §5, §6, §8 | done | (1) G-2 sai com código 0 e imprime `[OK] Válida`; (2) `test_xml_valido_contra_xsd_oficial` deixa de ser pulado e passa; (3) `git diff main -- schemas/1.00 schemas/1.01` vazio; (4) teste negativo: `serie` inválida (ex.: `abc`, 6 dígitos) continua rejeitada pelo esquema usado na validação; (5) se houver cópia derivada: é regenerável por script, ignorada no git, e um teste garante que ela difere dos oficiais só nas âncoras `^`/`$` de início e fim de `xs:pattern` (hoje, 1 linha); (6) `.env.example` e o default de `NFSE_XSD_DIR` coerentes com o local real dos XSDs |
 | T-002 | Fixar toolchain e dependências | T-000 | §6, §8 | done | Versão do Python fixada; dependências com versões exatas e lock; instalação travada documentada em §8 e funcionando em checkout limpo. Ferramenta de lock: pip-tools (Q-05, DEC-011) |
-| T-003 | Gates de formatação e lint com ruff, e CI em Windows | T-000 | §6, §8 | review | (1) as regras do ruff são apresentadas ao humano e aprovadas antes de qualquer instalação; (2) ruff com versão exata em `requirements-dev.in` e nos locks; (3) dois gates novos em §8, formatação e lint com avisos como erro, passando no código existente; (4) workflow do GitHub Actions em `windows-latest` que faz a instalação travada (G-5) e roda os gates em toda PR; (5) nenhuma mudança de comportamento: G-1 e G-2 com o mesmo resultado (DEC-012) |
+| T-003 | Gates de formatação e lint com ruff, e CI em Windows | T-000 | §6, §8 | done | (1) as regras do ruff são apresentadas ao humano e aprovadas antes de qualquer instalação; (2) ruff com versão exata em `requirements-dev.in` e nos locks; (3) dois gates novos em §8, formatação e lint com avisos como erro, passando no código existente; (4) workflow do GitHub Actions em `windows-latest` que faz a instalação travada (G-5) e roda os gates em toda PR; (5) nenhuma mudança de comportamento: G-1 e G-2 com o mesmo resultado (DEC-012) |
 | T-004 | Certificado A1: carregar PFX (`certificado.py`) | T-001, T-019 | §3, §4, §7 | todo | (1) carrega um PFX com senha e expõe certificado e chave privada; (2) os testes usam um PFX autoassinado gerado por eles, nunca o do cliente; (3) senha errada, arquivo ausente e arquivo que não é PFX geram erro claro; (4) teste de INV-05: a senha e a chave não aparecem em `repr`, em mensagem de erro nem em log; (5) `certificado.py` recebe caminho e senha como argumentos, sem certificado global; um script manual abre o certificado do emitente indicado e mostra só titular, CNPJ e validade; (6) `cryptography` com versão exata e lock; (7) B-1 a B-3 respeitadas (DEC-014) |
 | T-005 | Assinatura XMLDSIG (`assinatura.py`) | T-004 | §5, §6 | todo | A definir com o humano depois de fechar o `[VERIFY]` do perfil de assinatura do padrão nacional (§6). Já decidido: signxml, se atender ao perfil; se não atender, voltar ao humano (DEC-015). Testes só com certificado autoassinado |
 | T-006 | Codec GZip+Base64 (`codec.py`) | T-001 | §5 | todo | (1) codificar: XML em bytes → GZip → Base64 em texto; (2) decodificar faz o inverso e devolve os mesmos bytes, com teste de ida e volta sobre entradas variadas; (3) entrada que não é Base64 ou GZip válido gera erro claro; (4) a saída é lida pelo `gzip` da biblioteca padrão; (5) só biblioteca padrão, sem dependência nova. Aprovados pelo humano em 2026-10-08 |
@@ -308,7 +323,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-013 | Responder as open questions | T-012 | §11 | done | (1) cada resposta do humano de 2026-10-08 transcrita em §11 e registrada como DEC; (2) as seções afetadas do spec (§1, §3, §4, §6, §7, §8, §9) coerentes com as respostas; (3) fatos novos checados em `docs/SOURCES.md`; (4) `schemas/LEIAME.md` cita a licença e o nome do pacote de origem; (5) nenhum código alterado; (6) G-1 a G-4 passam |
 | T-014 | Restringir `serie` a 1–49999 no modelo | T-001 | §4, §6 | todo | (1) `Dps` recusa `serie` fora de 1–49999 com erro claro que cita a faixa do aplicativo próprio; (2) testes nos limites: 1 e 49999 aceitos, 0 e 50000 recusados; (3) o XML do exemplo continua válido (DEC-019) |
 | T-015 | Teste de conexão mTLS em produção restrita | T-004 | §6, §7 | todo | (1) `[VERIFY]` da URL base da SEFIN em produção restrita fechado antes de qualquer chamada; (2) um script manual abre uma conexão mTLS com o certificado do emitente indicado e faz uma consulta que não emite nem altera nada (qual rota: a confirmar com o humano na task); (3) o resultado (status HTTP, erro de TLS ou sucesso) é registrado no spec; (4) nada de senha, chave ou conteúdo do certificado na saída (INV-05); (5) recusa qualquer ambiente que não seja produção restrita (INV-02); (6) httpx com versão exata e lock; (7) sem teste automatizado que dependa de rede ou do certificado real (DEC-014) |
-| T-016 | Teste das boundaries de §3 | T-001 | §3 | todo | (1) um teste em G-1 lê os imports de `src/` e falha se `src/dps.py` importar módulo de rede ou de certificado, se outro módulo que não `src/client.py` importar biblioteca de rede, ou se `src/` importar de `scripts/`; (2) teste negativo com um módulo de exemplo que viola cada regra; (3) passa no código atual (DEC-017) |
+| T-016 | Teste das boundaries de §3 | T-001 | §3 | review | (1) um teste em G-1 lê os imports de `src/` e falha se `src/dps.py` importar módulo de rede ou de certificado, se outro módulo que não `src/client.py` importar biblioteca de rede, ou se `src/` importar de `scripts/`; (2) teste negativo com um módulo de exemplo que viola cada regra; (3) passa no código atual (DEC-017) |
 | T-017 | Versionar a documentação oficial em `docs/referencia/gov-docs/` | T-013 | §5, §7, §8 | done | (1) os 8 anexos e os 6 manuais oficiais ficam em `docs/referencia/gov-docs/`, rastreados e sem alteração, com o SHA-256 de cada um em `docs/SOURCES.md`; (2) o `.gitignore` continua ignorando o resto de `docs/referencia/`; (3) a nota fiscal do cliente e qualquer arquivo com dado real continuam fora do git, e um gate falha se algo de `docs/referencia/` fora de `gov-docs/` estiver rastreado; (4) `LEIAME.md` na pasta com a página de origem, a data e a licença; (5) a pasta entra em §5 como frozen, conferida por gate; (6) os caminhos citados em `docs/SOURCES.md` batem com os arquivos; (7) G-1 a G-4 passam (DEC-021) |
 | T-018 | Campos opcionais da DPS usados nas notas atuais | T-010 | §5, §6 | todo | (1) o modelo aceita, todos opcionais: `cTribMun` (3 dígitos) no serviço; `fone` e `email` no prestador; grupo `tribFed/piscofins` com `CST` (obrigatório dentro do grupo) e `tpRetPisCofins`; (2) sem esses campos o XML sai igual ao de hoje; (3) cada um na posição do XSD, e os XMLs válidos contra a cópia local; (4) testes negativos: `cTribMun` fora de 3 dígitos, `email` sem estrutura de e-mail (E0148), `CST` e `tpRetPisCofins` fora das tabelas; (5) o exemplo de `scripts/gerar_dps.py` passa a emitir os quatro, com dados fictícios; (6) fora do escopo: base de cálculo, alíquotas e valores de PIS/COFINS e as demais retenções federais (DEC-023) |
 | T-019 | Configuração por emitente (lista de certificados) | T-001 | §3, §4, §7 | todo | (1) o `.env` fica só com o que é do ambiente (`NFSE_AMBIENTE`, URLs, `NFSE_XSD_DIR`); `NFSE_CERT_PATH` e `NFSE_CERT_PASSWORD` saem de `Config`; (2) cada emitente tem um arquivo local, numa pasta ignorada no git, com caminho do certificado, senha e dados fixos do emitente (CNPJ, município, inscrição municipal, regime); (3) um arquivo de exemplo com dados fictícios é versionado, e os scripts recebem qual emitente usar; (4) emitente inexistente ou arquivo incompleto gera erro claro; (5) a senha não aparece em `repr` nem em mensagem de erro (INV-05); (6) G-4 passa a recusar arquivos de emitente rastreados, exceto o de exemplo; (7) só biblioteca padrão para ler o arquivo; (8) o que muda a cada nota (tomador, serviço, valores, percentual de `pTotTribSN`) não fica no arquivo do emitente (DEC-024) |
@@ -323,10 +338,8 @@ Estado ao fim da sessão de 2026-10-08. Para retomar com o agente: pedir que lei
 
 **Onde o trabalho parou**
 
-- `main` está em `914ead3` e contém T-000, T-001, T-002, T-008, T-009, T-011, T-012, T-013 e T-017, todas `done`. T-017 entrou pela PR #8 e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
-- T-003 (ruff e CI em Windows) está em `review` na branch `t-003-ruff-and-ci`. A PR está aberta e a CI passou. Falta o humano mesclar com squash e pedir o `done`:
-  - link: `https://github.com/prbn021/nfse-poc/compare/main...t-003-ruff-and-ci?expand=1`
-  - título: `T-003: add ruff format and lint gates and a Windows CI workflow`
+- `main` está em `3e87c5f` e contém T-000, T-001, T-002, T-003, T-008, T-009, T-011, T-012, T-013 e T-017, todas `done`. T-003 entrou pela PR #9, com a CI passando na PR e em `main`, e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
+- T-016 (teste das boundaries de §3) em `review` na branch `t-016-boundaries-test`, que também traz o commit que marca a T-003 como `done`. Próxima pela ordem: T-019.
 
 **Para preparar uma máquina**
 
@@ -340,7 +353,7 @@ Estado ao fim da sessão de 2026-10-08. Para retomar com o agente: pedir que lei
 - **T-010** está liberada (DEC-013, DEC-022, DEC-024): só ME/EPP com tudo pelo Simples; Não Optante, MEI e ISS por fora são recusados pelo modelo.
 - **T-020 a T-023** têm acceptance criteria "a definir": dependem de ler as regras do Anexo I para cada caso.
 - **T-005** e **T-007** ainda têm acceptance criteria "a definir".
-- Open questions sem resposta: Q-17 (guarda de certificados e senhas no produto) e Q-18 (como o percentual mensal de `pTotTribSN` entra no sistema). Nenhuma bloqueia a PoC. Parcial: Q-11 (formato de `serie`, a confirmar na primeira transmissão).
+- Open questions sem resposta: Q-17 (guarda de certificados e senhas no produto), Q-18 (como o percentual mensal de `pTotTribSN` entra no sistema) e Q-19 (se a B-2 vale para `scripts/`). Q-19 bloqueia a T-015; as outras não bloqueiam a PoC. Parcial: Q-11 (formato de `serie`, a confirmar na primeira transmissão).
 - `[VERIFY]` abertos em §6: formato de `serie` no XML, URL base da SEFIN, procedência dos XSDs, demais regras de negócio do Anexo I, perfil de assinatura XMLDSIG, versões e licenças das bibliotecas escolhidas.
 
 **Outros**
@@ -370,6 +383,8 @@ Registro das atualizações anteriores, em ordem. O estado atual é o da seção
 - 2026-10-08: T-013 entrou em `main` pela PR #7 (`422aec0`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). T-017 em `review` na branch `t-017-version-official-docs`. Próxima pela ordem: T-003.
 - 2026-10-08: T-017 entrou em `main` pela PR #8 (`914ead3`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007).
 - 2026-10-08: T-003 em `review` na branch `t-003-ruff-and-ci`, com as regras do ruff aprovadas pelo humano na conversa. Próxima pela ordem: T-016.
+- 2026-10-08: T-003 entrou em `main` pela PR #9 (`3e87c5f`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). Fim da sessão: branch `t-016-boundaries-test` aberta, T-016 não começada.
+- 2026-10-08: T-016 em `review` na branch `t-016-boundaries-test`. Open question nova: Q-19. Próxima pela ordem: T-019.
 
 ## §10 Decision log
 
@@ -535,6 +550,12 @@ Decision: do humano, na conversa de 2026-10-08: linha de 100 caracteres; grupos 
 Alternatives: linha de 88 ou 120 (rejeitadas pelo humano: 20 e 1 linhas longas, contra 8); `S` também nos testes (rejeitado: aponta todo `assert`); trocar o `assert` de `gerar_id` por `ValueError` (rejeitado nesta task: mudaria o tipo do erro, e a task não pode mudar comportamento); fixar as actions por hash de commit (não feito: fica como melhoria possível).
 Consequences: §6, §8 (G-6, G-7, CI), §9. Docstrings longas foram reescritas em mais de uma linha e os comentários alinhados em coluna de `src/dps.py` deixaram de ficar alinhados. As actions são referenciadas pela tag de versão maior, que o dono do repositório delas pode mover. A CI ainda não foi vista rodando.
 
+### DEC-028: Teste das boundaries pelos imports, com lista fechada de bibliotecas de rede (2026-10-08, T-016)
+Context: a DEC-017 aprovou B-1 a B-3 com um teste em G-1 que confira os imports de `src/`. Os módulos de rede e de certificado ainda não existem, então o teste precisa valer para código futuro.
+Decision: do agente (escolhas de implementação): (a) a checagem fica em `tests/boundaries.py`, um helper de teste, e não em `src/` nem num script: ela não é parte do produto e não precisa de gate próprio, porque roda em G-1; (b) lê o código com `ast`, da biblioteca padrão, sem importar os módulos e sem ferramenta nova; conta todo `import`, inclusive dentro de função, de `try` ou de `if TYPE_CHECKING`; (c) "biblioteca de rede" é uma lista fechada: da biblioteca padrão, `socket`, `socketserver`, `ssl`, `http.client`, `http.server`, `urllib.request`, `ftplib`, `smtplib`, `poplib`, `imaplib`, `telnetlib`, `xmlrpc`; de terceiros, `httpx`, `httpcore`, `requests`, `requests_pkcs12`, `urllib3`, `aiohttp`, `websockets`; `urllib.parse` e `http.HTTPStatus` passam; (d) "módulo de certificado" é `src.certificado`, `cryptography`, `OpenSSL`, `signxml` ou `xmlsec`; (e) a B-1 é transitiva dentro de `src/`: `src/dps.py` também não pode importar `src/client.py` nem um módulo que chegue a rede ou a certificado, e o `__init__.py` dos pacotes conta; a B-2 olha só o import direto, porque outros módulos podem usar o `client`; (f) `ssl` conta como rede, não como certificado.
+Alternatives: lista de imports permitidos por módulo, em vez de lista de proibidos (rejeitado: todo import novo exigiria mudar o teste, e os acceptance criteria pedem a proibição); import-linter ou ferramenta parecida (rejeitado: ferramenta nova, item de "perguntar", para três regras); importar os módulos e inspecionar `sys.modules` (rejeitado: executa código e depende da ordem dos testes).
+Consequences: §3, §8, §9. Limites: uma biblioteca de rede fora da lista passa despercebida, então quem instalar uma acrescenta o nome dela; import por nome em texto não é visto; `scripts/` não é conferido (Q-19). Como `ssl` está na lista, a T-004 não pode importá-lo em `src/certificado.py`; se precisar, volta ao humano.
+
 ## §11 Open questions
 
 | ID | Question | Blocks |
@@ -557,3 +578,4 @@ Consequences: §6, §8 (G-6, G-7, CI), §9. Docstrings longas foram reescritas e
 | Q-16 | **Respondida em 2026-10-08, ver DEC-023:** task própria, T-018; os quatro campos são opcionais no Anexo I. Texto anterior: A DPS real do cliente tem campos que o modelo não gera: `cTribMun`, `tribFed/piscofins` (`CST`, `tpRetPisCofins`), `fone` e `email` do prestador. Entram na T-010, viram task própria ou ficam de fora? Recomendação do agente: task própria, depois de conferir no Anexo I quais são obrigatórios para esse perfil. | T-007 |
 | Q-17 | Guarda de certificados e senhas de vários emitentes no produto: onde ficam, quem tem acesso, como cada titular autoriza o uso e como se revoga. Na PoC ficam em arquivos locais fora do git (T-019). | Produto; não bloqueia a PoC |
 | Q-18 | Como o percentual de `pTotTribSN` de cada emitente e competência entra no sistema: digitado a cada mês, importado das declarações de faturamento, ou outro meio? E o que fazer quando falta o percentual da competência: recusar a emissão? | Produto; na PoC é argumento do script |
+| Q-19 | A B-2 ("só `src/client.py` faz I/O de rede") vale também para `scripts/`? O teste da T-016 só olha `src/`, como pedem os acceptance criteria. A T-015 prevê um script manual que abre uma conexão mTLS antes de `src/client.py` existir (T-007). Opções: (a) a B-2 vale só para `src/`, e o script da T-015 pode usar httpx direto; (b) vale para os dois, e a T-015 já cria um `src/client.py` mínimo, que o script chama; nesse caso o teste passa a ler `scripts/` também. | T-015 |
