@@ -1,6 +1,7 @@
 """Gate G-4 (INV-03): falha se o git rastrear o que não pode ser versionado.
 
-Isto é: .env, certificado (.pfx, .p12, .pem) ou arquivo de docs/referencia fora de gov-docs.
+Isto é: .env, certificado (.pfx, .p12, .pem), arquivo de emitente que não seja o exemplo
+ou arquivo de docs/referencia fora de gov-docs.
 """
 
 import subprocess
@@ -23,12 +24,12 @@ def main() -> int:
     rastreados = [c for c in saida.decode("utf-8").split("\0") if c]
     achados = proibidos(rastreados)
     if achados:
-        print("[X] Arquivo que não pode ser versionado (INV-03, T-017):")
+        print("[X] Arquivo que não pode ser versionado (INV-03, T-017, T-019):")
         for a in achados:
             print("   -", a)
         return 1
     print(
-        "[OK] Nenhum .env, certificado ou referência privada "
+        "[OK] Nenhum .env, certificado, arquivo de emitente ou referência privada "
         f"entre os {len(rastreados)} arquivos rastreados"
     )
     return 0

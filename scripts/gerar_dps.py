@@ -1,5 +1,9 @@
-"""Gera uma DPS de exemplo, salva em out/ e valida contra a cópia local dos XSDs oficiais."""
+"""Gera uma DPS de exemplo, salva em out/ e valida contra a cópia local dos XSDs oficiais.
 
+Os dados do prestador vêm do emitente escolhido com --emitente (padrão: o exemplo fictício).
+"""
+
+import argparse
 import sys
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -18,21 +22,27 @@ from src.dps import (
     para_xml,
     validar_xml,
 )
+from src.emitente import EXEMPLO, Emitente, carregar_emitente
 from src.xsd import preparar_copia_local
 
 BRT = timezone(timedelta(hours=-3))
 
 
-def dps_exemplo(tp_amb: int) -> Dps:
-    # Dados FICTÍCIOS. Troque pelos dados do prestador do certificado de testes.
+def dps_exemplo(tp_amb: int, emitente: Emitente) -> Dps:
+    # Tomador, serviço e valores são FICTÍCIOS; o prestador é o emitente recebido.
     return Dps(
         tp_amb=tp_amb,
-        c_loc_emi="3304557",  # exemplo: IBGE do Rio de Janeiro
+        c_loc_emi=emitente.municipio,
         serie=1,
         n_dps=1,
         d_compet=date.today(),
         dh_emi=datetime.now(BRT).replace(microsecond=0),
-        prestador=Prestador(cnpj="11222333000181", inscricao_municipal="12345", op_simp_nac=3),
+        prestador=Prestador(
+            cnpj=emitente.cnpj,
+            inscricao_municipal=emitente.inscricao_municipal,
+            op_simp_nac=emitente.op_simp_nac,
+            reg_esp_trib=emitente.reg_esp_trib,
+        ),
         tomador=Tomador(nome="Cliente de Teste Ltda", cnpj="99888777000161"),
         servico=Servico(
             c_loc_prestacao="3304557",
@@ -43,9 +53,21 @@ def dps_exemplo(tp_amb: int) -> Dps:
     )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--emitente",
+        default=EXEMPLO,
+        help="nome do arquivo em emitentes/, sem .toml (padrão: %(default)s, fictício)",
+    )
+    args = parser.parse_args(argv)
+    try:
+        emitente = carregar_emitente(args.emitente)
+    except ValueError as erro:
+        parser.error(str(erro))
+
     cfg = carregar_config()
-    dps = dps_exemplo(cfg.tp_amb)
+    dps = dps_exemplo(cfg.tp_amb, emitente)
     xml = para_xml(dps)
 
     saida = Path("out")

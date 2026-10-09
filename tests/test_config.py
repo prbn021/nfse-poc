@@ -5,8 +5,6 @@ from src.config import carregar_config
 
 VARIAVEIS = (
     "NFSE_AMBIENTE",
-    "NFSE_CERT_PATH",
-    "NFSE_CERT_PASSWORD",
     "NFSE_SEFIN_URL",
     "NFSE_ADN_URL",
     "NFSE_XSD_DIR",
@@ -47,3 +45,19 @@ def test_env_example_nao_anuncia_producao():
     assert len(ambiente) == 1
     assert ambiente[0].split("#")[0].strip() == "NFSE_AMBIENTE=homologacao"
     assert "| producao" not in ambiente[0]
+
+
+def test_config_nao_carrega_certificado(monkeypatch):
+    # T-019: certificado e senha são do emitente (src/emitente.py), não do ambiente.
+    monkeypatch.setenv("NFSE_CERT_PATH", "certs/qualquer.pfx")
+    monkeypatch.setenv("NFSE_CERT_PASSWORD", "senha-ficticia")
+    cfg = carregar_config()
+    assert not hasattr(cfg, "cert_path")
+    assert not hasattr(cfg, "cert_password")
+    assert "senha-ficticia" not in repr(cfg)
+
+
+def test_env_example_so_tem_variaveis_de_ambiente():
+    linhas = (config.RAIZ / ".env.example").read_text(encoding="utf-8").splitlines()
+    nomes = sorted(linha.split("=")[0] for linha in linhas if linha.startswith("NFSE_"))
+    assert nomes == ["NFSE_ADN_URL", "NFSE_AMBIENTE", "NFSE_SEFIN_URL", "NFSE_XSD_DIR"]

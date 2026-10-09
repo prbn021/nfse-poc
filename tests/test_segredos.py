@@ -16,6 +16,11 @@ from src.segredos import proibidos
         "docs/referencia/nota-de-cliente.xml",
         "docs/referencia/outra-pasta/arquivo.txt",
         "docs\\referencia\\nota-de-cliente.pdf",
+        "emitentes/acme.toml",
+        "emitentes/acme.json",
+        "emitentes/sub/exemplo.toml",
+        "emitentes\\acme.toml",
+        "emitentes/EXEMPLO.toml",
     ],
 )
 def test_arquivo_de_segredo_e_apontado(caminho):
@@ -34,6 +39,10 @@ def test_arquivo_de_segredo_e_apontado(caminho):
         "docs/referencia/gov-docs/SHA256SUMS",
         "docs/referencia/gov-docs/anexo_i.xlsx",
         "docs/referencia-de-estilo.md",
+        "emitentes/exemplo.toml",
+        "emitentes\\exemplo.toml",
+        "src/emitente.py",
+        "docs/emitentes/acme.toml",
     ],
 )
 def test_arquivo_comum_passa(caminho):

@@ -1,4 +1,4 @@
-"""Configuração por ambiente. Nada de segredo no código: tudo vem do .env."""
+"""Configuração por ambiente, lida do .env. Certificado e senha são do emitente: src/emitente.py."""
 
 from __future__ import annotations
 
@@ -17,8 +17,6 @@ TP_AMB = {"producao": 1, "homologacao": 2}
 @dataclass(frozen=True)
 class Config:
     ambiente: str
-    cert_path: Path
-    cert_password: str
     sefin_url: str
     adn_url: str
     xsd_dir: Path
@@ -39,8 +37,6 @@ def carregar_config() -> Config:
         raise ValueError(f"NFSE_AMBIENTE inválido: {ambiente!r} (use homologacao)")
     return Config(
         ambiente=ambiente,
-        cert_path=RAIZ / os.getenv("NFSE_CERT_PATH", "certs/certificado.pfx"),
-        cert_password=os.getenv("NFSE_CERT_PASSWORD", ""),
         sefin_url=os.getenv("NFSE_SEFIN_URL", "").rstrip("/"),
         adn_url=os.getenv("NFSE_ADN_URL", "").rstrip("/"),
         xsd_dir=RAIZ / os.getenv("NFSE_XSD_DIR", "schemas/1.01"),
