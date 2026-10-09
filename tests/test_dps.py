@@ -265,3 +265,22 @@ def test_nenhum_default_de_src_carrega_dado_de_emitente():
     assert _defaults(Servico) == {}
     assert _defaults(Valores) == {"trib_issqn": 1, "tp_ret_issqn": 1, "p_aliq": None}
     assert _defaults(Dps) == {"ver_aplic": "nfse-poc-0.1", "tp_emit": 1}
+
+
+# --- faixa de `serie` (T-014, DEC-019) -------------------------------------------------------
+
+
+@pytest.mark.parametrize("serie", [1, 49999])
+def test_serie_nos_limites_do_aplicativo_proprio_e_aceita(xsd, serie):
+    dps = _dps(serie=serie)
+    assert dps.id[25:30] == f"{serie:05d}"
+    assert validar_xml(para_xml(dps), xsd) == []
+
+
+@pytest.mark.parametrize("serie", [0, 50000, 99999, -1])
+def test_serie_fora_da_faixa_do_aplicativo_proprio_e_recusada(serie):
+    with pytest.raises(ValueError, match=r"serie deve estar entre 1 e 49999") as erro:
+        _dps(serie=serie)
+    # A mensagem diz por quê: 50000 a 89999 são dos emissores oficiais (E0010).
+    assert "aplicativo próprio" in str(erro.value)
+    assert "E0010" in str(erro.value)
