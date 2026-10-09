@@ -22,7 +22,8 @@ def emitente(pasta, *, senha=SENHA, pfx: bytes | None = None, nome="acme"):
         pfx = gerar_pfx(SENHA, inicio=INICIO, dias=365)
     (pasta / f"{nome}.pfx").write_bytes(pfx)
     (pasta / f"{nome}.toml").write_text(
-        f'cnpj = "{CNPJ}"\nmunicipio = "3304557"\nop_simp_nac = 3\nreg_esp_trib = 0\n\n'
+        f'cnpj = "{CNPJ}"\nmunicipio = "3304557"\nop_simp_nac = 3\n'
+        "reg_ap_trib_sn = 1\nreg_esp_trib = 0\n\n"
         f'[certificado]\ncaminho = "{(pasta / nome).as_posix()}.pfx"\nsenha = "{senha}"\n',
         encoding="utf-8",
     )

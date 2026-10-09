@@ -12,6 +12,7 @@ cnpj = "11222333000181"
 municipio = "3304557"
 inscricao_municipal = "12345"
 op_simp_nac = 3
+reg_ap_trib_sn = 1
 reg_esp_trib = 0
 
 [certificado]
@@ -40,9 +41,26 @@ def test_carrega_um_arquivo_completo(tmp_path):
         inscricao_municipal="12345",
         op_simp_nac=3,
         reg_esp_trib=0,
+        reg_ap_trib_sn=1,
         cert_path=RAIZ / "certs" / "acme.pfx",
         cert_senha=SENHA,
     )
+
+
+@pytest.mark.parametrize("op_simp_nac", [1, 2])
+def test_reg_ap_trib_sn_so_vale_para_me_epp(tmp_path, op_simp_nac):
+    gravar(tmp_path, texto=COMPLETO.replace("op_simp_nac = 3", f"op_simp_nac = {op_simp_nac}"))
+    with pytest.raises(ValueError, match="reg_ap_trib_sn só vale para op_simp_nac = 3"):
+        carregar_emitente("acme", tmp_path)
+
+
+@pytest.mark.parametrize("op_simp_nac", [1, 2])
+def test_nao_optante_e_mei_carregam_sem_reg_ap_trib_sn(tmp_path, op_simp_nac):
+    # O arquivo só confere as tabelas; quem recusa Não Optante e MEI é o modelo (DEC-022).
+    texto = sem_linha("reg_ap_trib_sn").replace("op_simp_nac = 3", f"op_simp_nac = {op_simp_nac}")
+    gravar(tmp_path, texto=texto)
+    emitente = carregar_emitente("acme", tmp_path)
+    assert (emitente.op_simp_nac, emitente.reg_ap_trib_sn) == (op_simp_nac, None)
 
 
 def test_inscricao_municipal_e_opcional(tmp_path):
@@ -81,6 +99,9 @@ def test_o_exemplo_versionado_carrega():
     emitente = carregar_emitente("exemplo")
     assert emitente.nome == "exemplo"
     assert emitente.op_simp_nac == 3
+    assert emitente.reg_ap_trib_sn == 1
+    # Perfil mais comum da carteira: sem inscrição municipal (T-010).
+    assert emitente.inscricao_municipal is None
     assert not emitente.cert_path.exists()
 
 
@@ -110,6 +131,7 @@ def test_nome_de_emitente_invalido(tmp_path, nome):
         ("municipio", "municipio"),
         ("op_simp_nac", "op_simp_nac"),
         ("reg_esp_trib", "reg_esp_trib"),
+        ("reg_ap_trib_sn", "reg_ap_trib_sn"),
         ("caminho", "certificado.caminho"),
         ("senha", "certificado.senha"),
     ],
@@ -163,6 +185,10 @@ def test_chave_desconhecida(tmp_path, texto, onde, aceitas):
         ("op_simp_nac = 3", "op_simp_nac = 4", "op_simp_nac"),
         ("op_simp_nac = 3", "op_simp_nac = 0", "op_simp_nac"),
         ("reg_esp_trib = 0", "reg_esp_trib = -1", "reg_esp_trib"),
+        ("reg_ap_trib_sn = 1", "reg_ap_trib_sn = 0", "reg_ap_trib_sn"),
+        ("reg_ap_trib_sn = 1", "reg_ap_trib_sn = 4", "reg_ap_trib_sn"),
+        ("reg_ap_trib_sn = 1", 'reg_ap_trib_sn = "1"', "reg_ap_trib_sn"),
+        ("reg_ap_trib_sn = 1", "reg_ap_trib_sn = true", "reg_ap_trib_sn"),
     ],
 )
 def test_valor_invalido(tmp_path, antigo, novo, citada):

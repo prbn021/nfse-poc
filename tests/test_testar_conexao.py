@@ -34,7 +34,8 @@ def config(sefin_url=BASE) -> Config:
 def emitente(pasta: Path, nome="acme") -> Path:
     (pasta / f"{nome}.pfx").write_bytes(gerar_pfx(SENHA))
     (pasta / f"{nome}.toml").write_text(
-        'cnpj = "11222333000181"\nmunicipio = "3304557"\nop_simp_nac = 3\nreg_esp_trib = 0\n\n'
+        'cnpj = "11222333000181"\nmunicipio = "3304557"\nop_simp_nac = 3\n'
+        "reg_ap_trib_sn = 1\nreg_esp_trib = 0\n\n"
         f'[certificado]\ncaminho = "{(pasta / nome).as_posix()}.pfx"\nsenha = "{SENHA}"\n',
         encoding="utf-8",
     )

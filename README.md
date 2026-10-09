@@ -68,7 +68,13 @@ O script grava a DPS em `out\DPS<42 dígitos>.xml`, imprime o XML e valida. A ú
 [OK] Válida contra DPS_v1.01.xsd (cópia local em ...\schemas\1.01-local)
 ```
 
-Código de saída: `0` válida, `1` inválida (os erros são listados), `2` XSD não encontrado em `NFSE_XSD_DIR` ou emitente não encontrado ou com arquivo inválido.
+Código de saída: `0` válida, `1` inválida (os erros são listados), `2` XSD não encontrado em `NFSE_XSD_DIR`, emitente não encontrado ou com arquivo inválido, ou percentual inválido.
+
+A DPS é de emitente ME/EPP do Simples Nacional, o único caso que o modelo emite hoje: leva `regApTribSN` e o percentual aproximado dos tributos do Simples (`pTotTribSN`), e não leva `indTotTrib`. O percentual muda por emitente e competência; informe-o com `--p-tot-trib-sn` (de `0` a `99.99`, com ponto decimal). Sem o argumento, vale `6.00`, fictício:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\gerar_dps.py --p-tot-trib-sn 4.50
+```
 
 A cópia local dos XSDs (`schemas\1.01-local`, fora do git) é refeita a cada execução. Para gerá-la sem gerar a DPS: `.\.venv\Scripts\python.exe scripts\preparar_xsd.py`.
 
@@ -83,6 +89,7 @@ Copy-Item emitentes\exemplo.toml emitentes\minha-empresa.toml   # depois edite o
 
 - Sem `--emitente`, o script usa o `exemplo`.
 - O nome do arquivo usa só letras minúsculas, dígitos, `-` e `_`.
+- `reg_ap_trib_sn` (regime de apuração do Simples) é obrigatório para ME/EPP desde a T-010. Hoje o modelo só emite com `1` (tributos pelo Simples). Um arquivo criado antes disso precisa ganhar essa linha.
 - Tomador, serviço e valores da DPS gerada continuam fictícios, fixos no script.
 - A senha fica em texto no arquivo. Não copie esses arquivos para fora da máquina nem os adicione ao git: a verificação `checar_segredos.py` falha se um deles for rastreado.
 
@@ -133,6 +140,7 @@ As mesmas verificações rodam no GitHub Actions, em Windows, em toda PR (`.gith
 | `ValueError` citando INV-02   | O `.env` tem `NFSE_AMBIENTE=producao`. Volte para `homologacao`.                                                    |
 | `[!] XSD não encontrado`      | `NFSE_XSD_DIR` no `.env` não aponta para `schemas/1.01`.                                                            |
 | `GET docs/index: 404` no `testar_conexao.py` | O `.env` tem a `NFSE_SEFIN_URL` antiga, sem `/SefinNacional`. Copie a linha do `.env.example`. |
+| `incompleto, falta: reg_ap_trib_sn` | O arquivo do emitente é de antes da T-010. Acrescente `reg_ap_trib_sn = 1` (veja `emitentes\exemplo.toml`). |
 | A venv ficou inconsistente    | Apague e recrie: `Remove-Item -Recurse -Force .venv`, depois os comandos de "Preparar o ambiente".                  |
 
 ## Mudar uma dependência
