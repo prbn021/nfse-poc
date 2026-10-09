@@ -1,4 +1,4 @@
-"""Confere as boundaries de docs/SPEC.md §3 a partir dos imports de src/ (T-016).
+"""Confere as boundaries de docs/SPEC.md §3 a partir dos imports de src/ e scripts/ (T-016, T-015).
 
 Lê só os `import` e `from ... import` do código, em qualquer nível (inclusive dentro de
 função ou de `try`). Import feito por nome em texto (`importlib.import_module`, `__import__`)
@@ -48,10 +48,11 @@ PROIBIDO_PARA_DPS = REDE | CERTIFICADO | {CLIENT}
 
 
 def ler_fontes(raiz: Path) -> dict[str, str]:
-    """Lê os .py sob src/: caminho relativo à raiz (com barras) -> código."""
+    """Lê os .py sob src/ e scripts/: caminho relativo à raiz (com barras) -> código."""
     return {
         arquivo.relative_to(raiz).as_posix(): arquivo.read_text(encoding="utf-8")
-        for arquivo in sorted((raiz / "src").rglob("*.py"))
+        for pasta in ("src", SCRIPTS)
+        for arquivo in sorted((raiz / pasta).rglob("*.py"))
     }
 
 
@@ -113,6 +114,7 @@ def violacoes(fontes: dict[str, str]) -> list[str]:
     for nome, importados in deps.items():
         if nome != CLIENT and not nome.startswith(CLIENT + "."):
             achadas.update(f"B-2: {nome} -> {alvo}" for alvo in importados & REDE)
-        if SCRIPTS in importados:
+        # B-3 vale para src/; scripts/ pode depender de si mesmo.
+        if not nome.startswith(SCRIPTS + ".") and SCRIPTS in importados:
             achadas.add(f"B-3: {nome} -> {SCRIPTS}")
     return sorted(achadas)

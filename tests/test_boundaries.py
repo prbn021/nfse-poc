@@ -1,4 +1,7 @@
-"""Boundaries B-1 a B-3 de docs/SPEC.md §3, conferidas pelos imports de src/ (T-016, DEC-017)."""
+"""Boundaries B-1 a B-3 de docs/SPEC.md §3, conferidas pelos imports de src/ e scripts/.
+
+T-016, DEC-017; scripts/ entrou na T-015 (DEC-031).
+"""
 
 import pytest
 
@@ -14,7 +17,8 @@ def test_o_codigo_atual_respeita_as_boundaries():
     # Sem isto o teste passaria sem ter lido nada.
     assert "src/dps.py" in fontes
     assert "src/__init__.py" in fontes
-    assert all(caminho.startswith("src/") for caminho in fontes)
+    assert "scripts/gerar_dps.py" in fontes
+    assert all(caminho.startswith(("src/", "scripts/")) for caminho in fontes)
     assert violacoes(fontes) == []
 
 
@@ -106,6 +110,24 @@ def test_b2_outro_modulo_pode_usar_o_client():
 
 
 @pytest.mark.parametrize(
+    "codigo", ["import httpx\n", "import ssl\n", "from socket import socket\n"]
+)
+def test_b2_script_importa_biblioteca_de_rede(codigo):
+    alvo = codigo.split()[1]
+    assert violacoes({"scripts/testar_conexao.py": codigo}) == [
+        f"B-2: scripts.testar_conexao -> {alvo}"
+    ]
+
+
+def test_b2_script_pode_usar_o_client():
+    fontes = {
+        "scripts/testar_conexao.py": "from src.client import ClienteNfse\n",
+        "src/client.py": "import httpx\n",
+    }
+    assert violacoes(fontes) == []
+
+
+@pytest.mark.parametrize(
     "codigo",
     [
         "from urllib.parse import quote\n",
@@ -134,6 +156,11 @@ def test_b2_import_que_nao_e_de_rede_passa(codigo):
 )
 def test_b3_src_importa_de_scripts(codigo):
     assert violacoes({"src/config.py": codigo}) == ["B-3: src.config -> scripts"]
+
+
+def test_b3_nao_vale_dentro_de_scripts():
+    fontes = {"scripts/emitir.py": "from scripts import gerar_dps\nfrom src.dps import Dps\n"}
+    assert violacoes(fontes) == []
 
 
 def test_b3_nome_parecido_com_scripts_passa():
