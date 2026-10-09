@@ -23,10 +23,13 @@ _LINHA = re.compile(r"\(at line (\d+), column \d+\)$")
 # Tabelas do leiaute v1.01 (docs/SPEC.md §6).
 _OP_SIMP_NAC = (1, 2, 3)
 _REG_ESP_TRIB = (0, 1, 2, 3, 4, 5, 6, 9)
+_REG_AP_TRIB_SN = (1, 2, 3)
+_ME_EPP = 3
 
 _SECAO = "certificado"
 _RAIZ_OBRIGATORIAS = ("cnpj", "municipio", "op_simp_nac", "reg_esp_trib")
-_RAIZ_OPCIONAIS = ("inscricao_municipal",)
+# reg_ap_trib_sn: obrigatória para ME/EPP e proibida para os demais (T-010).
+_RAIZ_OPCIONAIS = ("inscricao_municipal", "reg_ap_trib_sn")
 _CERTIFICADO = ("caminho", "senha")
 
 
@@ -38,6 +41,7 @@ class Emitente:
     inscricao_municipal: str | None
     op_simp_nac: int
     reg_esp_trib: int
+    reg_ap_trib_sn: int | None  # só ME/EPP
     cert_path: Path
     cert_senha: str = field(repr=False)
 
@@ -97,11 +101,14 @@ def carregar_emitente(nome: str, pasta: Path = PASTA) -> Emitente:
         )
 
     faltam = [c for c in _RAIZ_OBRIGATORIAS if c not in dados]
+    if dados.get("op_simp_nac") == _ME_EPP and "reg_ap_trib_sn" not in dados:
+        faltam.append("reg_ap_trib_sn")
     faltam += [f"{_SECAO}.{c}" for c in _CERTIFICADO if c not in cert]
     if faltam:
         raise ValueError(f"{arquivo.name}: incompleto, falta: {', '.join(faltam)}")
 
     inscricao = dados.get("inscricao_municipal")
+    reg_ap = dados.get("reg_ap_trib_sn")
     conferencias = (
         ("cnpj", _texto(dados["cnpj"], r"\d{14}"), "14 dígitos, entre aspas"),
         (
@@ -116,12 +123,19 @@ def carregar_emitente(nome: str, pasta: Path = PASTA) -> Emitente:
         ),
         ("op_simp_nac", _inteiro(dados["op_simp_nac"], _OP_SIMP_NAC), f"um de {_OP_SIMP_NAC}"),
         ("reg_esp_trib", _inteiro(dados["reg_esp_trib"], _REG_ESP_TRIB), f"um de {_REG_ESP_TRIB}"),
+        (
+            "reg_ap_trib_sn",
+            reg_ap is None or _inteiro(reg_ap, _REG_AP_TRIB_SN),
+            f"um de {_REG_AP_TRIB_SN}",
+        ),
         (f"{_SECAO}.caminho", _texto(cert["caminho"]), "caminho do .pfx, entre aspas"),
         (f"{_SECAO}.senha", isinstance(cert["senha"], str), "texto entre aspas"),
     )
     for chave, valido, esperado in conferencias:
         if not valido:
             raise ValueError(f"{arquivo.name}: {chave} inválido: esperado {esperado}")
+    if reg_ap is not None and dados["op_simp_nac"] != _ME_EPP:
+        raise ValueError(f"{arquivo.name}: reg_ap_trib_sn só vale para op_simp_nac = {_ME_EPP}")
 
     return Emitente(
         nome=nome,
@@ -130,6 +144,7 @@ def carregar_emitente(nome: str, pasta: Path = PASTA) -> Emitente:
         inscricao_municipal=inscricao,
         op_simp_nac=dados["op_simp_nac"],
         reg_esp_trib=dados["reg_esp_trib"],
+        reg_ap_trib_sn=reg_ap,
         cert_path=RAIZ / cert["caminho"],
         cert_senha=cert["senha"],
     )

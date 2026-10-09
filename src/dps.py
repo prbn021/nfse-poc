@@ -29,18 +29,56 @@ def _dinheiro(valor: Decimal) -> str:
     return f"{Decimal(valor):.2f}"
 
 
+# Simples Nacional (docs/SPEC.md §6, Anexo I v1.01).
+NAO_OPTANTE, MEI, ME_EPP = 1, 2, 3
+_OP_SIMP_NAC = {NAO_OPTANTE: "Não Optante", MEI: "MEI", ME_EPP: "ME/EPP"}
+# regApTribSN: 1 = federais e municipal pelo SN; 2 e 3 = ISSQN por fora (T-023).
+APURACAO_PELO_SN = 1
+_REG_AP_TRIB_SN = (1, 2, 3)
+
+
 # ----------------------------------------------------------------- modelo
 
 
 @dataclass(frozen=True)
 class Prestador:
+    """Tudo aqui é do emitente: nenhum campo tem default (INV-06)."""
+
     cnpj: str
     inscricao_municipal: str | None
-    op_simp_nac: int  # 1=Não optante, 2=MEI, 3=ME/EPP (conferir tabela no manual)
-    reg_esp_trib: int = 0  # 0=Nenhum (conferir tabela no manual)
+    op_simp_nac: int  # 1=Não Optante, 2=MEI, 3=ME/EPP
+    reg_esp_trib: int  # 0=Nenhum
+    reg_ap_trib_sn: int | None  # só ME/EPP: 1=pelo SN, 2 e 3=ISSQN por fora
 
     def __post_init__(self):
         _so_digitos(self.cnpj, 14, "prestador.cnpj")
+        if self.op_simp_nac not in _OP_SIMP_NAC:
+            raise ValueError(
+                f"prestador.op_simp_nac deve ser 1, 2 ou 3, recebido: {self.op_simp_nac!r}"
+            )
+        if self.op_simp_nac != ME_EPP:
+            if self.reg_ap_trib_sn is not None:
+                raise ValueError("regApTribSN só existe para ME/EPP (op_simp_nac = 3)")
+            raise ValueError(
+                f"emitente {_OP_SIMP_NAC[self.op_simp_nac]} ainda não suportado: "
+                "o modelo só emite para ME/EPP (DEC-022)"
+            )
+        if self.reg_ap_trib_sn is None:
+            raise ValueError("regApTribSN é obrigatório para ME/EPP (prestador.reg_ap_trib_sn)")
+        if self.reg_ap_trib_sn not in _REG_AP_TRIB_SN:
+            raise ValueError(
+                f"prestador.reg_ap_trib_sn deve ser 1, 2 ou 3, recebido: {self.reg_ap_trib_sn!r}"
+            )
+        if self.reg_ap_trib_sn != APURACAO_PELO_SN:
+            raise ValueError(
+                f"regApTribSN = {self.reg_ap_trib_sn} (ISSQN por fora do Simples) ainda não "
+                "suportado (T-023)"
+            )
+        # Anexo I: ME/EPP com apuração pelo SN não tem regime especial.
+        if self.reg_esp_trib != 0:
+            raise ValueError(
+                "regEspTrib deve ser 0 (Nenhum) para ME/EPP com apuração pelo Simples Nacional"
+            )
 
 
 @dataclass(frozen=True)
@@ -74,13 +112,28 @@ class Servico:
 @dataclass(frozen=True)
 class Valores:
     v_serv: Decimal
-    trib_issqn: int = 1  # 1=Operação tributável (conferir tabela)
-    tp_ret_issqn: int = 1  # 1=Sem retenção (conferir tabela)
-    p_aliq: Decimal | None = None  # só se o município/regime exigir
+    # % aproximado dos tributos pela alíquota do Simples; muda por emitente e competência
+    # (Q-18), por isso é dado da nota, sem default.
+    p_tot_trib_sn: Decimal
+    trib_issqn: int = 1  # 1=Operação tributável
+    tp_ret_issqn: int = 1  # 1=Não Retido, 2=Retido pelo Tomador, 3=Retido pelo Intermediário
+    p_aliq: Decimal | None = None  # ME/EPP pelo SN: só com retenção, e então obrigatório
 
     def __post_init__(self):
         if Decimal(self.v_serv) <= 0:
             raise ValueError("valores.v_serv deve ser > 0")
+        # TSDec2V2: de 0 a 99.99, com até 2 casas. Decimal, para não arredondar sem aviso.
+        p = self.p_tot_trib_sn
+        if (
+            not isinstance(p, Decimal)
+            or not p.is_finite()
+            or not (0 <= p < 100)
+            or p.as_tuple().exponent < -2
+        ):
+            raise ValueError(
+                "valores.p_tot_trib_sn deve ser um Decimal de 0 a 99.99, com até 2 casas, "
+                f"recebido: {p!r}"
+            )
 
 
 @dataclass(frozen=True)
@@ -108,6 +161,13 @@ class Dps:
             raise ValueError("serie deve estar entre 1 e 99999")
         if not (0 < self.n_dps <= 999_999_999_999_999):
             raise ValueError("n_dps deve ter até 15 dígitos")
+        # Anexo I, ME/EPP com ISSQN pelo SN (o único caso aceito por Prestador), sem
+        # benefício municipal: pAliq só com retenção do ISSQN, e então é obrigatório.
+        retido = self.valores.tp_ret_issqn in (2, 3)
+        if retido and self.valores.p_aliq is None:
+            raise ValueError("pAliq é obrigatório quando o ISSQN é retido (tp_ret_issqn 2 ou 3)")
+        if not retido and self.valores.p_aliq is not None:
+            raise ValueError("pAliq não pode ser informado sem retenção do ISSQN (tp_ret_issqn 1)")
 
     @property
     def id(self) -> str:
@@ -155,6 +215,8 @@ def para_xml(dps: Dps) -> bytes:
         _sub(prest, "IM", dps.prestador.inscricao_municipal)
     reg = _sub(prest, "regTrib")
     _sub(reg, "opSimpNac", str(dps.prestador.op_simp_nac))
+    if dps.prestador.reg_ap_trib_sn is not None:
+        _sub(reg, "regApTribSN", str(dps.prestador.reg_ap_trib_sn))
     _sub(reg, "regEspTrib", str(dps.prestador.reg_esp_trib))
 
     toma = _sub(inf, "toma")
@@ -180,8 +242,9 @@ def para_xml(dps: Dps) -> bytes:
     _sub(tm, "tpRetISSQN", str(dps.valores.tp_ret_issqn))
     if dps.valores.p_aliq is not None:
         _sub(tm, "pAliq", _dinheiro(dps.valores.p_aliq))
+    # ME/EPP: indTotTrib é proibido (E0712); vai o percentual do Simples (DEC-013).
     tot = _sub(trib, "totTrib")
-    _sub(tot, "indTotTrib", "0")
+    _sub(tot, "pTotTribSN", _dinheiro(dps.valores.p_tot_trib_sn))
 
     return etree.tostring(raiz, xml_declaration=True, encoding="UTF-8")
 

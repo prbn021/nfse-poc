@@ -1,6 +1,7 @@
-"""O script de exemplo monta a DPS com os dados do emitente escolhido (T-019)."""
+"""O script de exemplo monta a DPS com os dados do emitente escolhido (T-019, T-010)."""
 
 import sys
+from decimal import Decimal
 
 import pytest
 
@@ -15,8 +16,22 @@ import gerar_dps
 def test_dps_do_emitente_de_exemplo_mantem_o_id_de_antes():
     dps = gerar_dps.dps_exemplo(2, carregar_emitente("exemplo"))
     assert dps.id == "DPS330455721122233300018100001000000000000001"
-    assert dps.prestador.inscricao_municipal == "12345"
+
+
+def test_exemplo_usa_o_perfil_mais_comum_da_carteira():
+    # ME/EPP pelo Simples, prestador sem inscrição municipal, tomador pessoa física
+    # (DEC-013). Tudo fictício.
+    dps = gerar_dps.dps_exemplo(2, carregar_emitente("exemplo"))
     assert dps.prestador.op_simp_nac == 3
+    assert dps.prestador.reg_ap_trib_sn == 1
+    assert dps.prestador.inscricao_municipal is None
+    assert dps.tomador.cpf is not None and dps.tomador.cnpj is None
+    assert dps.valores.p_tot_trib_sn == gerar_dps.P_TOT_TRIB_SN_FICTICIO
+
+
+def test_ptottribsn_vem_do_argumento():
+    dps = gerar_dps.dps_exemplo(2, carregar_emitente("exemplo"), Decimal("4.50"))
+    assert dps.valores.p_tot_trib_sn == Decimal("4.50")
 
 
 def test_dps_usa_os_dados_do_emitente_recebido():
@@ -25,16 +40,17 @@ def test_dps_usa_os_dados_do_emitente_recebido():
         nome="beta",
         cnpj="99888777000161",
         municipio="3550308",
-        inscricao_municipal=None,
+        inscricao_municipal="98765",
         op_simp_nac=3,
         reg_esp_trib=0,
+        reg_ap_trib_sn=1,
         cert_path=RAIZ / "certs" / "beta.pfx",
         cert_senha="senha-ficticia",
     )
     dps = gerar_dps.dps_exemplo(2, outro)
     assert dps.c_loc_emi == "3550308"
     assert dps.prestador.cnpj == "99888777000161"
-    assert dps.prestador.inscricao_municipal is None
+    assert dps.prestador.inscricao_municipal == "98765"
     assert dps.id.startswith("DPS3550308299888777000161")
 
 
@@ -43,3 +59,11 @@ def test_emitente_inexistente_sai_com_erro_claro(capsys):
         gerar_dps.main(["--emitente", "nao-existe"])
     assert saida.value.code == 2
     assert "emitente 'nao-existe' não encontrado" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("valor", ["abc", "100", "6.123", "-1"])
+def test_ptottribsn_invalido_sai_com_erro_claro(capsys, valor):
+    with pytest.raises(SystemExit) as saida:
+        gerar_dps.main(["--p-tot-trib-sn", valor])
+    assert saida.value.code == 2
+    assert "p_tot_trib_sn" in capsys.readouterr().err

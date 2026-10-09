@@ -1,12 +1,13 @@
 """Gera uma DPS de exemplo, salva em out/ e valida contra a cópia local dos XSDs oficiais.
 
 Os dados do prestador vêm do emitente escolhido com --emitente (padrão: o exemplo fictício).
+O percentual de pTotTribSN da competência vem de --p-tot-trib-sn (padrão fictício, Q-18).
 """
 
 import argparse
 import sys
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -26,10 +27,14 @@ from src.emitente import EXEMPLO, Emitente, carregar_emitente
 from src.xsd import preparar_copia_local
 
 BRT = timezone(timedelta(hours=-3))
+P_TOT_TRIB_SN_FICTICIO = Decimal("6.00")
 
 
-def dps_exemplo(tp_amb: int, emitente: Emitente) -> Dps:
+def dps_exemplo(
+    tp_amb: int, emitente: Emitente, p_tot_trib_sn: Decimal = P_TOT_TRIB_SN_FICTICIO
+) -> Dps:
     # Tomador, serviço e valores são FICTÍCIOS; o prestador é o emitente recebido.
+    # Perfil mais comum da carteira: ME/EPP pelo Simples, tomador pessoa física (DEC-013).
     return Dps(
         tp_amb=tp_amb,
         c_loc_emi=emitente.municipio,
@@ -42,15 +47,25 @@ def dps_exemplo(tp_amb: int, emitente: Emitente) -> Dps:
             inscricao_municipal=emitente.inscricao_municipal,
             op_simp_nac=emitente.op_simp_nac,
             reg_esp_trib=emitente.reg_esp_trib,
+            reg_ap_trib_sn=emitente.reg_ap_trib_sn,
         ),
-        tomador=Tomador(nome="Cliente de Teste Ltda", cnpj="99888777000161"),
+        tomador=Tomador(nome="Cliente de Teste", cpf="12345678909"),
         servico=Servico(
             c_loc_prestacao="3304557",
             c_trib_nac="010101",
             descricao="Desenvolvimento de software sob encomenda",
         ),
-        valores=Valores(v_serv=Decimal("100.00")),
+        valores=Valores(v_serv=Decimal("100.00"), p_tot_trib_sn=p_tot_trib_sn),
     )
+
+
+def _decimal(texto: str) -> Decimal:
+    try:
+        return Decimal(texto)
+    except InvalidOperation:
+        raise ValueError(
+            f"p_tot_trib_sn inválido: {texto!r} (use ponto decimal, ex.: 6.00)"
+        ) from None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -60,6 +75,11 @@ def main(argv: list[str] | None = None) -> int:
         default=EXEMPLO,
         help="nome do arquivo em emitentes/, sem .toml (padrão: %(default)s, fictício)",
     )
+    parser.add_argument(
+        "--p-tot-trib-sn",
+        default=str(P_TOT_TRIB_SN_FICTICIO),
+        help="%% aproximado dos tributos do Simples na competência (padrão: %(default)s, fictício)",
+    )
     args = parser.parse_args(argv)
     try:
         emitente = carregar_emitente(args.emitente)
@@ -67,7 +87,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(str(erro))
 
     cfg = carregar_config()
-    dps = dps_exemplo(cfg.tp_amb, emitente)
+    try:
+        dps = dps_exemplo(cfg.tp_amb, emitente, _decimal(args.p_tot_trib_sn))
+    except ValueError as erro:
+        parser.error(str(erro))
     xml = para_xml(dps)
 
     saida = Path("out")
