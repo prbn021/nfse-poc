@@ -35,6 +35,8 @@ _OP_SIMP_NAC = {NAO_OPTANTE: "Não Optante", MEI: "MEI", ME_EPP: "ME/EPP"}
 # regApTribSN: 1 = federais e municipal pelo SN; 2 e 3 = ISSQN por fora (T-023).
 APURACAO_PELO_SN = 1
 _REG_AP_TRIB_SN = (1, 2, 3)
+# Série da DPS de aplicativo próprio (Anexo I v1.01, E0010; DEC-019).
+SERIE_MIN, SERIE_MAX = 1, 49999
 
 
 # ----------------------------------------------------------------- modelo
@@ -157,8 +159,11 @@ class Dps:
         _so_digitos(self.c_loc_emi, 7, "c_loc_emi")
         if self.dh_emi.tzinfo is None:
             raise ValueError("dh_emi precisa de fuso horário (ex.: -03:00)")
-        if not (0 < self.serie <= 99999):
-            raise ValueError("serie deve estar entre 1 e 99999")
+        if not (SERIE_MIN <= self.serie <= SERIE_MAX):
+            raise ValueError(
+                f"serie deve estar entre {SERIE_MIN} e {SERIE_MAX}, a faixa do aplicativo próprio; "
+                f"as de 50000 a 89999 são dos emissores oficiais (E0010), recebido: {self.serie!r}"
+            )
         if not (0 < self.n_dps <= 999_999_999_999_999):
             raise ValueError("n_dps deve ter até 15 dígitos")
         # Anexo I, ME/EPP com ISSQN pelo SN (o único caso aceito por Prestador), sem
