@@ -50,7 +50,7 @@ py -3.11 -m venv .venv
 Copy-Item .env.example .env
 ```
 
-- Os dois arquivos de dependências são necessários. `requirements.txt` tem só o que a execução usa (lxml, python-dotenv); o pytest está em `requirements-dev.txt`.
+- Os dois arquivos de dependências são necessários. `requirements.txt` tem só o que a execução usa (lxml, python-dotenv, cryptography); o pytest está em `requirements-dev.txt`.
 - Não é preciso ativar a venv: todos os comandos chamam `.\.venv\Scripts\python.exe` diretamente.
 - Para gerar a DPS e rodar os testes, o `.env` copiado serve como está. Ele só tem o que é do ambiente; certificado e senha são de cada emitente (veja "Emitentes") e ainda não são usados por nenhum script.
 - O ambiente é sempre `homologacao` (produção restrita). `NFSE_AMBIENTE=producao` é recusado pelo código.
@@ -84,6 +84,14 @@ Copy-Item emitentes\exemplo.toml emitentes\minha-empresa.toml   # depois edite o
 - O nome do arquivo usa só letras minúsculas, dígitos, `-` e `_`.
 - Tomador, serviço e valores da DPS gerada continuam fictícios, fixos no script.
 - A senha fica em texto no arquivo. Não copie esses arquivos para fora da máquina nem os adicione ao git: a verificação `checar_segredos.py` falha se um deles for rastreado.
+
+Para conferir o certificado de um emitente (o `.pfx` e a senha indicados no arquivo dele):
+
+```powershell
+.\.venv\Scripts\python.exe scripts\ver_certificado.py --emitente minha-empresa
+```
+
+O script mostra só o titular, o CNPJ e a validade, e sai com código `1` se o emitente, o arquivo ou a senha estiverem errados. Ele não confere se o certificado está vencido nem se a cadeia é da ICP-Brasil, e não usa rede.
 
 ## Testar
 
