@@ -7,6 +7,8 @@
 cnpj = "11222333000181"
 municipio = "3304557"            # código IBGE do município do emitente (7 dígitos)
 # inscricao_municipal = "12345"  # opcional: tire o "#" se o emitente tiver
+fone = "2133334444"              # opcional: só dígitos, com DDD
+email = "contato@empresa-ficticia.com.br"  # opcional
 op_simp_nac = 3                  # 1 = Não Optante, 2 = MEI, 3 = ME/EPP (hoje só 3 é emitido)
 reg_ap_trib_sn = 1               # só ME/EPP: 1 = tributos pelo Simples (2 e 3 ainda não)
 reg_esp_trib = 0                 # 0 = nenhum (obrigatório para ME/EPP pelo Simples)
