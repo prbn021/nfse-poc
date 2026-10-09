@@ -50,9 +50,10 @@ py -3.11 -m venv .venv
 Copy-Item .env.example .env
 ```
 
-- Os dois arquivos de dependências são necessários. `requirements.txt` tem só o que a execução usa (lxml, python-dotenv, cryptography); o pytest está em `requirements-dev.txt`.
+- Os dois arquivos de dependências são necessários. `requirements.txt` tem só o que a execução usa (lxml, python-dotenv, cryptography, httpx); o pytest está em `requirements-dev.txt`.
 - Não é preciso ativar a venv: todos os comandos chamam `.\.venv\Scripts\python.exe` diretamente.
-- Para gerar a DPS e rodar os testes, o `.env` copiado serve como está. Ele só tem o que é do ambiente; certificado e senha são de cada emitente (veja "Emitentes") e ainda não são usados por nenhum script.
+- Para gerar a DPS e rodar os testes, o `.env` copiado serve como está. Ele só tem o que é do ambiente; certificado e senha são de cada emitente (veja "Emitentes") e só são usados pelos scripts manuais daquela seção.
+- `NFSE_SEFIN_URL` mudou na T-015 para `https://sefin.producaorestrita.nfse.gov.br/SefinNacional`. Um `.env` copiado antes disso precisa dessa linha nova.
 - O ambiente é sempre `homologacao` (produção restrita). `NFSE_AMBIENTE=producao` é recusado pelo código.
 
 ## Rodar
@@ -93,6 +94,14 @@ Para conferir o certificado de um emitente (o `.pfx` e a senha indicados no arqu
 
 O script mostra só o titular, o CNPJ e a validade, e sai com código `1` se o emitente, o arquivo ou a senha estiverem errados. Ele não confere se o certificado está vencido nem se a cadeia é da ICP-Brasil, e não usa rede.
 
+Para testar a conexão mTLS com a SEFIN Nacional em produção restrita, com o certificado de um emitente:
+
+```powershell
+.\.venv\Scripts\python.exe scripts	estar_conexao.py --emitente minha-empresa
+```
+
+O script não emite nada. Ele baixa a página de documentação da API e a especificação que ela aponta (as duas vão para `out\`) e consulta, com `HEAD /dps/{id}`, um Id de DPS que não existe; a resposta esperada é `404`. Mostra só a URL, os códigos HTTP e as rotas da especificação. Código de saída: `0` todas as consultas tiveram resposta HTTP, `1` emitente, certificado ou URL recusados (só `https://*.producaorestrita.nfse.gov.br` é aceita), `3` erro de rede ou de TLS. Usa a rede e o certificado real: é manual, fora dos testes.
+
 ## Testar
 
 ```powershell
@@ -123,6 +132,7 @@ As mesmas verificações rodam no GitHub Actions, em Windows, em toda PR (`.gith
 | Falha em `tests/test_lock.py` | O que está instalado na venv não bate com os locks. Rode de novo o comando de instalação.                           |
 | `ValueError` citando INV-02   | O `.env` tem `NFSE_AMBIENTE=producao`. Volte para `homologacao`.                                                    |
 | `[!] XSD não encontrado`      | `NFSE_XSD_DIR` no `.env` não aponta para `schemas/1.01`.                                                            |
+| `GET docs/index: 404` no `testar_conexao.py` | O `.env` tem a `NFSE_SEFIN_URL` antiga, sem `/SefinNacional`. Copie a linha do `.env.example`. |
 | A venv ficou inconsistente    | Apague e recrie: `Remove-Item -Recurse -Force .venv`, depois os comandos de "Preparar o ambiente".                  |
 
 ## Mudar uma dependência
