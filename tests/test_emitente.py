@@ -11,6 +11,8 @@ COMPLETO = f"""\
 cnpj = "11222333000181"
 municipio = "3304557"
 inscricao_municipal = "12345"
+fone = "2133334444"
+email = "contato@empresa-ficticia.com.br"
 op_simp_nac = 3
 reg_ap_trib_sn = 1
 reg_esp_trib = 0
@@ -39,6 +41,8 @@ def test_carrega_um_arquivo_completo(tmp_path):
         cnpj="11222333000181",
         municipio="3304557",
         inscricao_municipal="12345",
+        fone="2133334444",
+        email="contato@empresa-ficticia.com.br",
         op_simp_nac=3,
         reg_esp_trib=0,
         reg_ap_trib_sn=1,
@@ -61,6 +65,12 @@ def test_nao_optante_e_mei_carregam_sem_reg_ap_trib_sn(tmp_path, op_simp_nac):
     gravar(tmp_path, texto=texto)
     emitente = carregar_emitente("acme", tmp_path)
     assert (emitente.op_simp_nac, emitente.reg_ap_trib_sn) == (op_simp_nac, None)
+
+
+@pytest.mark.parametrize("chave", ["fone", "email"])
+def test_fone_e_email_sao_opcionais(tmp_path, chave):
+    gravar(tmp_path, texto=sem_linha(chave))
+    assert getattr(carregar_emitente("acme", tmp_path), chave) is None
 
 
 def test_inscricao_municipal_e_opcional(tmp_path):
@@ -102,6 +112,8 @@ def test_o_exemplo_versionado_carrega():
     assert emitente.reg_ap_trib_sn == 1
     # Perfil mais comum da carteira: sem inscrição municipal (T-010).
     assert emitente.inscricao_municipal is None
+    # Fictícios, para o exemplo emitir os campos opcionais (T-018).
+    assert emitente.fone and emitente.email
     assert not emitente.cert_path.exists()
 
 
@@ -155,7 +167,11 @@ def test_secao_certificado_ausente(tmp_path):
 @pytest.mark.parametrize(
     ("texto", "onde", "aceitas"),
     [
-        ('cnpjj = "1"\n' + COMPLETO, "na raiz", "cnpj, inscricao_municipal, municipio"),
+        (
+            'cnpjj = "1"\n' + COMPLETO,
+            "na raiz",
+            "cnpj, email, fone, inscricao_municipal, municipio",
+        ),
         (COMPLETO + 'senhaa = "1"\n', r"em \[certificado\]", "caminho, senha"),
     ],
 )
@@ -189,6 +205,10 @@ def test_chave_desconhecida(tmp_path, texto, onde, aceitas):
         ("reg_ap_trib_sn = 1", "reg_ap_trib_sn = 4", "reg_ap_trib_sn"),
         ("reg_ap_trib_sn = 1", 'reg_ap_trib_sn = "1"', "reg_ap_trib_sn"),
         ("reg_ap_trib_sn = 1", "reg_ap_trib_sn = true", "reg_ap_trib_sn"),
+        ('fone = "2133334444"', 'fone = "(21) 3333-4444"', "fone"),
+        ('fone = "2133334444"', "fone = 2133334444", "fone"),
+        ('email = "contato@empresa-ficticia.com.br"', 'email = "sem-arroba"', "email"),
+        ('email = "contato@empresa-ficticia.com.br"', 'email = ""', "email"),
     ],
 )
 def test_valor_invalido(tmp_path, antigo, novo, citada):
@@ -217,7 +237,7 @@ def test_toml_malformado_cita_arquivo_e_linha(tmp_path):
     with pytest.raises(ValueError, match="TOML inválido") as erro:
         carregar_emitente("acme", tmp_path)
     assert "acme.toml" in str(erro.value)
-    assert "linha 4" in str(erro.value)
+    assert "linha 6" in str(erro.value)
 
 
 # --- INV-05: a senha nunca aparece em repr nem em mensagem de erro ------------------------
