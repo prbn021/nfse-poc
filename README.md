@@ -14,6 +14,7 @@ O que ainda não existe: assinatura, compactação, transmissão e consulta. Nad
 ```sh
 nfse-poc/
 ├── certs/                # .pfx de homologação (fora do git)
+├── emitentes/            # um .toml por emitente (fora do git, menos o exemplo.toml)
 ├── docs/                 #
 ├── schema                #
 ├── scripts/
@@ -29,7 +30,7 @@ nfse-poc/
 │   ├── client.py         # HTTP com mTLS (POST /nfse, GET /nfse/{chave}...)
 │   └── erros.py          # exceções mapeadas dos retornos da API
 ├── tests/
-├── .env.example          # caminhos, senha do cert, base URL (fora do git)
+├── .env.example          # ambiente, base URL, pasta dos XSDs
 └── 
 ```
 
@@ -51,7 +52,7 @@ Copy-Item .env.example .env
 
 - Os dois arquivos de dependências são necessários. `requirements.txt` tem só o que a execução usa (lxml, python-dotenv); o pytest está em `requirements-dev.txt`.
 - Não é preciso ativar a venv: todos os comandos chamam `.\.venv\Scripts\python.exe` diretamente.
-- Para gerar a DPS e rodar os testes, o `.env` copiado serve como está. Certificado e senha ainda não são usados.
+- Para gerar a DPS e rodar os testes, o `.env` copiado serve como está. Ele só tem o que é do ambiente; certificado e senha são de cada emitente (veja "Emitentes") e ainda não são usados por nenhum script.
 - O ambiente é sempre `homologacao` (produção restrita). `NFSE_AMBIENTE=producao` é recusado pelo código.
 
 ## Rodar
@@ -66,9 +67,23 @@ O script grava a DPS em `out\DPS<42 dígitos>.xml`, imprime o XML e valida. A ú
 [OK] Válida contra DPS_v1.01.xsd (cópia local em ...\schemas\1.01-local)
 ```
 
-Código de saída: `0` válida, `1` inválida (os erros são listados), `2` XSD não encontrado em `NFSE_XSD_DIR`.
+Código de saída: `0` válida, `1` inválida (os erros são listados), `2` XSD não encontrado em `NFSE_XSD_DIR` ou emitente não encontrado ou com arquivo inválido.
 
 A cópia local dos XSDs (`schemas\1.01-local`, fora do git) é refeita a cada execução. Para gerá-la sem gerar a DPS: `.\.venv\Scripts\python.exe scripts\preparar_xsd.py`.
+
+## Emitentes
+
+Os dados fixos de cada emitente (CNPJ, município, inscrição municipal, regime) e o caminho e a senha do certificado dele ficam em `emitentes\<nome>.toml`. A pasta está fora do git, menos o `exemplo.toml`, que só tem dados fictícios e serve de modelo.
+
+```powershell
+Copy-Item emitentes\exemplo.toml emitentes\minha-empresa.toml   # depois edite o arquivo
+.\.venv\Scripts\python.exe scripts\gerar_dps.py --emitente minha-empresa
+```
+
+- Sem `--emitente`, o script usa o `exemplo`.
+- O nome do arquivo usa só letras minúsculas, dígitos, `-` e `_`.
+- Tomador, serviço e valores da DPS gerada continuam fictícios, fixos no script.
+- A senha fica em texto no arquivo. Não copie esses arquivos para fora da máquina nem os adicione ao git: a verificação `checar_segredos.py` falha se um deles for rastreado.
 
 ## Testar
 
@@ -83,7 +98,7 @@ As outras verificações que toda mudança precisa passar (lista completa em `do
 ```powershell
 .\.venv\Scripts\python.exe scripts\gerar_dps.py          # sai com código 0
 git diff --exit-code main -- schemas/1.01 docs/referencia/gov-docs   # sem saída: XSDs e documentação oficial intocados
-.\.venv\Scripts\python.exe scripts\checar_segredos.py    # nenhum .env, certificado ou referência privada no git
+.\.venv\Scripts\python.exe scripts\checar_segredos.py    # nenhum .env, certificado, arquivo de emitente ou referência privada no git
 .\.venv\Scripts\python.exe -m ruff format --check .      # formatação; sem --check, corrige
 .\.venv\Scripts\python.exe -m ruff check .               # lint; qualquer apontamento é erro
 ```

@@ -69,20 +69,23 @@ Existente:
 
 ```
 scripts/gerar_dps.py ──> src/config.py  (lê .env via python-dotenv)
+        ├──────────────> src/emitente.py ──> src/config.py  (lê emitentes/<nome>.toml)
         │
         ├──────────────> src/dps.py     (dataclasses + lxml: modelo, para_xml, validar_xml)
         └──────────────> src/xsd.py     (cópia local dos XSDs sem âncoras)
 scripts/preparar_xsd.py ─> src/config.py, src/xsd.py
 scripts/checar_segredos.py ─> src/segredos.py  (lê `git ls-files`)
-tests/ ────────────────> src/dps.py, src/xsd.py, src/config.py, src/segredos.py, docs/referencia/gov-docs (manifesto)
+tests/ ────────────────> src/dps.py, src/xsd.py, src/config.py, src/emitente.py, src/segredos.py, scripts/gerar_dps.py, docs/referencia/gov-docs (manifesto)
 tests/boundaries.py ───> lê o código de src/ como texto (não o importa)
 ```
 
-- `src/config.py`: `Config` imutável; `NFSE_AMBIENTE` tem default `homologacao` e `producao` levanta `ValueError` (INV-02); `tp_amb` 1=produção, 2=homologação.
-- `src/segredos.py`: `proibidos` aponta, numa lista de caminhos, os que são `.env`, certificado (`.pfx`, `.p12`, `.pem`) ou arquivo de `docs/referencia/` fora de `gov-docs/`. `scripts/checar_segredos.py` aplica isso a `git ls-files` (G-4, INV-03, DEC-026).
+- `src/config.py`: `Config` imutável, só com o que é do ambiente (`ambiente`, `sefin_url`, `adn_url`, `xsd_dir`); `NFSE_AMBIENTE` tem default `homologacao` e `producao` levanta `ValueError` (INV-02); `tp_amb` 1=produção, 2=homologação. Não carrega certificado nem senha (T-019).
+- `src/emitente.py`: `Emitente` imutável (`nome`, `cnpj`, `municipio`, `inscricao_municipal`, `op_simp_nac`, `reg_esp_trib`, `cert_path`, `cert_senha`, esta fora do `repr`); `carregar_emitente(nome)` lê `emitentes/<nome>.toml` com `tomllib` e valida chaves e valores. Não abre o certificado. As mensagens de erro citam o arquivo e as chaves que o módulo conhece, nunca um valor nem um nome de chave vindos do arquivo (INV-05, DEC-029).
+- `src/segredos.py`: `proibidos` aponta, numa lista de caminhos, os que são `.env`, certificado (`.pfx`, `.p12`, `.pem`), arquivo de `emitentes/` que não seja `emitentes/exemplo.toml`, ou arquivo de `docs/referencia/` fora de `gov-docs/`. `scripts/checar_segredos.py` aplica isso a `git ls-files` (G-4, INV-03, DEC-026, DEC-029).
 - `src/dps.py`: `Prestador`, `Tomador`, `Servico`, `Valores`, `Dps`; `gerar_id`; `para_xml` (sem assinatura); `localizar_xsd_dps`; `validar_xml`.
 - `src/xsd.py`: `remover_ancoras`, `dir_local`, `preparar_copia_local`. Gera `schemas/<versão>-local/` (ignorada no git) a partir dos oficiais, tirando só `^` inicial e `$` final dos `xs:pattern`; recusa escrever na pasta de origem (DEC-003).
 - `scripts/preparar_xsd.py`: gera a cópia local sob demanda. `scripts/gerar_dps.py` a regenera a cada execução e valida contra ela.
+- `scripts/gerar_dps.py`: recebe `--emitente NOME` (padrão `exemplo`, o arquivo fictício versionado) e monta o prestador e o município de emissão com os dados dele; tomador, serviço e valores são fictícios, fixos no script.
 
 Planejado no `README.md`, ainda inexistente: `certificado.py`, `assinatura.py`, `codec.py`, `client.py`, `erros.py`, `scripts/emitir.py`, `consultar.py`, `baixar_danfse.py`.
 
@@ -112,8 +115,8 @@ Aprovados pelo humano em 2026-10-07 (DEC-004).
 | INV-02 | O ambiente padrão é homologação, e `producao` é recusado pelo código enquanto durar a PoC | `test_sem_variaveis_o_ambiente_e_homologacao` e `test_producao_e_recusado` (`tests/test_config.py`), em G-1. A trava está em `carregar_config()`; ver o limite registrado na DEC-010 |
 | INV-03 | Certificados e senhas nunca vão ao git | `.gitignore` (`.env`, `certs/`, `*.pfx`, `*.p12`, `*.pem`) e G-4, que falha se algum desses arquivos estiver rastreado |
 | INV-04 | O `Id` da DPS é `DPS` + 42 dígitos (45 posições): município (7) + tipo de inscrição federal (1) + inscrição federal (14) + série (5) + número da DPS (15) | `test_id_tem_45_caracteres_e_composicao_correta` |
-| INV-05 | Senha e conteúdo de certificado (chave privada, bytes do PFX) nunca aparecem em log, saída de terminal, `repr` ou mensagem de erro; os testes automatizados usam só dados fictícios e certificado autoassinado gerado por eles | Ainda sem teste: aprovado em 2026-10-08 (DEC-014), antes de existir código que abra certificado. A T-004 cria o teste, como acceptance criteria |
-| INV-06 | Nada específico de um emitente fica fixo no código de `src/`: CNPJ, município, regime, códigos de serviço, percentuais e certificado são sempre dados de entrada | Ainda sem teste: aprovado em 2026-10-08 (DEC-024). A T-010 cria os testes, gerando a DPS para emitentes fictícios diferentes; a T-019 tira o certificado único da configuração |
+| INV-05 | Senha e conteúdo de certificado (chave privada, bytes do PFX) nunca aparecem em log, saída de terminal, `repr` ou mensagem de erro; os testes automatizados usam só dados fictícios e certificado autoassinado gerado por eles | Parcial. A senha no arquivo do emitente: `test_senha_nao_aparece_no_repr` e `test_senha_nao_aparece_em_mensagem_de_erro` (`tests/test_emitente.py`), em G-1, desde a T-019. O conteúdo do certificado ainda não tem teste, porque nenhum código o abre: a T-004 cria esse teste, como acceptance criteria (DEC-014) |
+| INV-06 | Nada específico de um emitente fica fixo no código de `src/`: CNPJ, município, regime, códigos de serviço, percentuais e certificado são sempre dados de entrada | Parcial. Certificado e dados fixos do emitente saíram da configuração e do script na T-019: `test_dois_emitentes_na_mesma_pasta` (`tests/test_emitente.py`), `test_dps_usa_os_dados_do_emitente_recebido` (`tests/test_gerar_dps.py`) e `test_config_nao_carrega_certificado` (`tests/test_config.py`), em G-1. Falta a T-010, que gera e valida a DPS para emitentes fictícios de municípios e serviços diferentes e confere os defaults de `src/` (DEC-024) |
 
 ## §5 Interfaces and frozen areas
 
@@ -130,7 +133,8 @@ Interfaces frozen (mudam só com nova versão, dados de teste regenerados e nova
 
 Não frozen:
 
-- Variáveis `NFSE_*` de `.env.example`: ainda devem mudar até a transmissão funcionar.
+- Variáveis `NFSE_*` de `.env.example` (`NFSE_AMBIENTE`, `NFSE_SEFIN_URL`, `NFSE_ADN_URL`, `NFSE_XSD_DIR`): ainda devem mudar até a transmissão funcionar. `NFSE_CERT_PATH` e `NFSE_CERT_PASSWORD` deixaram de existir na T-019.
+- Formato do arquivo de emitente (`emitentes/<nome>.toml`, modelo em `emitentes/exemplo.toml`): deve ganhar campos na T-010 (`regApTribSN`) e na T-018.
 - `schemas/1.00/`: não era usado e foi removido do repositório em T-009 (2026-10-08).
 
 Dados de teste "golden": não existem. `out/` é ignorado no git.
@@ -174,13 +178,14 @@ Todas as checagens "no XSD" valem para os arquivos locais, e dependem do item de
 
 ## §7 Security and secrets
 
-- Segredos vêm de `.env` (ignorado no git) via `python-dotenv`: `NFSE_CERT_PATH`, `NFSE_CERT_PASSWORD`.
+- O único segredo que o código lê hoje é a senha do certificado de cada emitente, em `emitentes/<nome>.toml`, na seção `[certificado]`, junto com o caminho do `.pfx` (T-019). A pasta é ignorada no git, menos `emitentes/exemplo.toml`, que só tem dados fictícios; G-4 falha se outro arquivo dela for rastreado. A senha fica em texto no arquivo, protegida só pelas permissões da máquina: vale para a PoC, e a guarda no produto é a Q-17.
+- O `.env` (ignorado no git, lido via `python-dotenv`) ficou só com o que é do ambiente. `NFSE_CERT_PATH` e `NFSE_CERT_PASSWORD` não são mais lidas; se ainda estiverem no `.env` de uma máquina, são ignoradas e devem ser apagadas à mão.
 - `docs/referencia/` guarda arquivos com dados reais (notas de clientes) e é ignorada no git, exceto `gov-docs/`, que só tem documentação oficial. G-4 falha se algo dali fora de `gov-docs/` for rastreado (T-017).
 - Ambientes: `homologacao` (default; "produção restrita") e `producao`. `carregar_config()` recusa `producao` com `ValueError` enquanto durar a PoC (INV-02, T-008).
 - Nenhum segredo encontrado no histórico: `git ls-files` não contém `.env`, `.pfx`, `.p12` nem `.pem`.
 - **Observação**: existe `certs/lika-2026.pfx` (8.719 bytes, ignorado no git) e o `.env` local tem `NFSE_CERT_PATH` apontando para ele e `NFSE_CERT_PASSWORD` preenchida. O contexto da conversa dizia que ainda não há certificado A1. Não abri o arquivo nem li a senha. O humano confirmou em 2026-10-07 que é o certificado do cliente (Q-03).
 - Uso dos certificados (DEC-014): os testes automatizados usam sempre um certificado autoassinado gerado por eles. Um certificado real só é aberto por script manual: na T-004, para mostrar titular, CNPJ e validade; na T-015 e na T-007, para conectar em produção restrita. Hoje há um, o do primeiro emitente, cujo titular autorizou o uso em produção restrita `[HUMAN]`.
-- Vários emitentes (DEC-024): cada emitente tem o seu certificado e a sua senha, hoje guardados pela equipe de contabilidade `[HUMAN]`. Na PoC ficam em arquivos locais fora do git, um conjunto por emitente (T-019); a configuração atual, com um único `NFSE_CERT_PATH` no `.env`, é provisória. Como o produto guarda certificados e senhas de terceiros, e quem autoriza o uso de cada um: Q-17.
+- Vários emitentes (DEC-024): cada emitente tem o seu certificado e a sua senha, hoje guardados pela equipe de contabilidade `[HUMAN]`. Na PoC ficam em arquivos locais fora do git: o `.pfx` em `certs/` e um `emitentes/<nome>.toml` por emitente, com o caminho e a senha (T-019). Como o produto guarda certificados e senhas de terceiros, e quem autoriza o uso de cada um: Q-17.
 - INV-05: senha e conteúdo de certificado nunca vão a log, terminal, `repr` ou mensagem de erro. Dados reais (CNPJ/CPF de tomadores, XML de DPS real) ficam só em arquivos fora do git (`out/`, `.env`, `docs/referencia/`); os testes usam dados fictícios.
 - Repositório e licença (DEC-018): o repositório é público no GitHub (conferido em 2026-10-08) e não tem `LICENSE`, por decisão do humano: o código fica visível, sem permissão de uso para terceiros. Os XSDs em `schemas/1.01` são redistribuídos sem alteração, com crédito em `schemas/LEIAME.md`, sob a CC BY-ND 3.0 declarada na página de origem; a leitura de que o aviso do site cobre o pacote de schemas é do agente, não um parecer jurídico. Copiar código de terceiros para cá continua exigindo perguntar antes (não-negociável 8).
 - Os dados de exemplo em `scripts/gerar_dps.py` e nos testes estão marcados como fictícios no código.
@@ -209,7 +214,7 @@ Para mudar uma dependência: editar o `.in`, gerar os dois locks de novo, nesta 
 | G-1 | Testes | `.\.venv\Scripts\python.exe -m pytest -q -rs` | Toda task |
 | G-2 | Verificação do projeto: gerar e validar a DPS | `.\.venv\Scripts\python.exe scripts\gerar_dps.py` (sucesso = código de saída 0) | Toda task |
 | G-3 | Áreas frozen intocadas (XSDs e documentação oficial) | `git diff --exit-code main -- schemas/1.01 docs/referencia/gov-docs` | Toda task |
-| G-4 | Nenhum segredo ou referência privada rastreados (`.env`, `*.pfx`, `*.p12`, `*.pem`, e `docs/referencia/` fora de `gov-docs/`) | `.\.venv\Scripts\python.exe scripts\checar_segredos.py` (sucesso = código de saída 0) | Toda task |
+| G-4 | Nenhum segredo ou referência privada rastreados (`.env`, `*.pfx`, `*.p12`, `*.pem`, `emitentes/` fora o `exemplo.toml`, e `docs/referencia/` fora de `gov-docs/`) | `.\.venv\Scripts\python.exe scripts\checar_segredos.py` (sucesso = código de saída 0) | Toda task |
 | G-6 | Formatação | `.\.venv\Scripts\python.exe -m ruff format --check .` (para corrigir: o mesmo comando sem `--check`) | Toda task |
 | G-7 | Lint com avisos como erro | `.\.venv\Scripts\python.exe -m ruff check .` (qualquer apontamento dá código de saída 1) | Toda task |
 | G-5 | Instalação travada | `.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt` (precisa de rede) | Ao preparar o ambiente e em toda task que mude um `requirements*`. Nas demais, `tests/test_lock.py` (em G-1) confere que o ambiente bate com os locks |
@@ -285,6 +290,14 @@ Reexecutados antes e depois de atualizar o spec e as fontes com a documentação
 - Nenhum arquivo de `src/` ou de `scripts/` mudou.
 - CI: passou na PR da task, segundo o humano na conversa de 2026-10-08 `[HUMAN]`; o agente não consultou a execução.
 
+### Depois de T-019 (2026-10-08, branch `t-019-per-issuer-config`)
+
+- G-1: `165 passed`, nenhum pulado (65 testes novos: 51 em `tests/test_emitente.py`, 3 em `tests/test_gerar_dps.py`, 2 em `tests/test_config.py` e 9 casos em `tests/test_segredos.py`). Antes da implementação, com `carregar_emitente` devolvendo um emitente vazio, 58 falhavam.
+- G-2: código de saída 0, sem argumentos, com saída idêntica à de antes da task, fora a hora de emissão. Com `--emitente nao-existe`: código de saída 2 e a mensagem de emitente não encontrado.
+- G-3: sem diferenças. G-6 e G-7: código de saída 0.
+- G-4: código de saída 0. Testado à mão: com um `emitentes/teste.toml` fictício forçado no índice do git (`git add -f`), sai com código 1 e aponta o arquivo; desfeito em seguida. Sem o `-f`, o `.gitignore` já o deixa fora.
+- A CI não mudou: os comandos dos gates são os mesmos.
+
 ### Diagnóstico da falha de G-2 (hipótese confirmada)
 
 1. **Norma.** XML Schema Part 2, Apêndice F: as expressões regulares são ancoradas implicitamente no início e no fim; `^` e `$` não são metacaracteres (`^` só tem papel especial dentro de `[...]`). Num `xs:pattern`, portanto, são caracteres literais.
@@ -327,7 +340,7 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-016 | Teste das boundaries de §3 | T-001 | §3 | done | (1) um teste em G-1 lê os imports de `src/` e falha se `src/dps.py` importar módulo de rede ou de certificado, se outro módulo que não `src/client.py` importar biblioteca de rede, ou se `src/` importar de `scripts/`; (2) teste negativo com um módulo de exemplo que viola cada regra; (3) passa no código atual (DEC-017) |
 | T-017 | Versionar a documentação oficial em `docs/referencia/gov-docs/` | T-013 | §5, §7, §8 | done | (1) os 8 anexos e os 6 manuais oficiais ficam em `docs/referencia/gov-docs/`, rastreados e sem alteração, com o SHA-256 de cada um em `docs/SOURCES.md`; (2) o `.gitignore` continua ignorando o resto de `docs/referencia/`; (3) a nota fiscal do cliente e qualquer arquivo com dado real continuam fora do git, e um gate falha se algo de `docs/referencia/` fora de `gov-docs/` estiver rastreado; (4) `LEIAME.md` na pasta com a página de origem, a data e a licença; (5) a pasta entra em §5 como frozen, conferida por gate; (6) os caminhos citados em `docs/SOURCES.md` batem com os arquivos; (7) G-1 a G-4 passam (DEC-021) |
 | T-018 | Campos opcionais da DPS usados nas notas atuais | T-010 | §5, §6 | todo | (1) o modelo aceita, todos opcionais: `cTribMun` (3 dígitos) no serviço; `fone` e `email` no prestador; grupo `tribFed/piscofins` com `CST` (obrigatório dentro do grupo) e `tpRetPisCofins`; (2) sem esses campos o XML sai igual ao de hoje; (3) cada um na posição do XSD, e os XMLs válidos contra a cópia local; (4) testes negativos: `cTribMun` fora de 3 dígitos, `email` sem estrutura de e-mail (E0148), `CST` e `tpRetPisCofins` fora das tabelas; (5) o exemplo de `scripts/gerar_dps.py` passa a emitir os quatro, com dados fictícios; (6) fora do escopo: base de cálculo, alíquotas e valores de PIS/COFINS e as demais retenções federais (DEC-023) |
-| T-019 | Configuração por emitente (lista de certificados) | T-001 | §3, §4, §7 | doing | (1) o `.env` fica só com o que é do ambiente (`NFSE_AMBIENTE`, URLs, `NFSE_XSD_DIR`); `NFSE_CERT_PATH` e `NFSE_CERT_PASSWORD` saem de `Config`; (2) cada emitente tem um arquivo local, numa pasta ignorada no git, com caminho do certificado, senha e dados fixos do emitente (CNPJ, município, inscrição municipal, regime); (3) um arquivo de exemplo com dados fictícios é versionado, e os scripts recebem qual emitente usar; (4) emitente inexistente ou arquivo incompleto gera erro claro; (5) a senha não aparece em `repr` nem em mensagem de erro (INV-05); (6) G-4 passa a recusar arquivos de emitente rastreados, exceto o de exemplo; (7) só biblioteca padrão para ler o arquivo; (8) o que muda a cada nota (tomador, serviço, valores, percentual de `pTotTribSN`) não fica no arquivo do emitente (DEC-024) |
+| T-019 | Configuração por emitente (lista de certificados) | T-001 | §3, §4, §7 | review | (1) o `.env` fica só com o que é do ambiente (`NFSE_AMBIENTE`, URLs, `NFSE_XSD_DIR`); `NFSE_CERT_PATH` e `NFSE_CERT_PASSWORD` saem de `Config`; (2) cada emitente tem um arquivo local, numa pasta ignorada no git, com caminho do certificado, senha e dados fixos do emitente (CNPJ, município, inscrição municipal, regime); (3) um arquivo de exemplo com dados fictícios é versionado, e os scripts recebem qual emitente usar; (4) emitente inexistente ou arquivo incompleto gera erro claro; (5) a senha não aparece em `repr` nem em mensagem de erro (INV-05); (6) G-4 passa a recusar arquivos de emitente rastreados, exceto o de exemplo; (7) só biblioteca padrão para ler o arquivo; (8) o que muda a cada nota (tomador, serviço, valores, percentual de `pTotTribSN`) não fica no arquivo do emitente (DEC-024) |
 | T-020 | Construção civil: grupo de obra na DPS | T-018 | §5, §6 | todo | A definir depois de ler no Anexo I as regras do grupo de obra. Existe na carteira (DEC-024) |
 | T-021 | Serviço prestado em outro município | T-018 | §5, §6 | todo | A definir depois de ler no Anexo I as regras de local de incidência e de retenção do ISSQN quando o local da prestação difere do município do emitente. Existe na carteira (DEC-024) |
 | T-022 | Tomador no exterior | T-018 | §5, §6 | todo | A definir depois de ler no Anexo I as regras de tomador com NIF e endereço no exterior e do grupo de comércio exterior. Existe na carteira (DEC-024) |
@@ -340,12 +353,13 @@ Estado ao fim da sessão de 2026-10-08. Para retomar com o agente: pedir que lei
 **Onde o trabalho parou**
 
 - `main` está em `e1ee2b6` e contém T-000, T-001, T-002, T-003, T-008, T-009, T-011, T-012, T-013, T-016 e T-017, todas `done`. T-016 entrou pela PR #10 e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007). T-003 entrou pela PR #9, com a CI passando na PR e em `main`, e foi marcada `done` pelo humano na conversa de 2026-10-08 (transcrito pelo agente, DEC-007).
-- T-019 (configuração por emitente) em andamento na branch `t-019-per-issuer-config`.
+- T-019 (configuração por emitente) em `review` na branch `t-019-per-issuer-config`, que também traz o commit que marca a T-016 como `done`. Próxima pela ordem: T-004.
+- Pendente com o humano, fora do git: criar `emitentes/<nome>.toml` do primeiro emitente a partir do `exemplo.toml` e apagar `NFSE_CERT_PATH` e `NFSE_CERT_PASSWORD` do `.env` local. O agente não abriu o `.env` nem o certificado.
 
 **Para preparar uma máquina**
 
 1. Seguir "Preparar o ambiente" do `README.md` (instalação travada, G-5) e rodar G-1 a G-4.
-2. Não viajam pelo git e precisam ser levados à mão, se forem necessários: `certs/*.pfx` e a senha, o que está em `docs/referencia/` fora de `gov-docs/` (a nota de exemplo, que tem dados reais), chave SSH, `git config user.name`/`user.email`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
+2. Não viajam pelo git e precisam ser levados à mão, se forem necessários: `certs/*.pfx` e os arquivos de `emitentes/` (menos o exemplo), que têm a senha, o que está em `docs/referencia/` fora de `gov-docs/` (a nota de exemplo, que tem dados reais), chave SSH, `git config user.name`/`user.email`. `schemas/1.01-local` é regenerada por `scripts/gerar_dps.py`.
 3. Se a máquina não tiver o `gh`, as PRs são abertas pela interface do GitHub, com link, título e descrição entregues pelo agente.
 
 **Próxima task e o que está pendente para ela**
@@ -387,6 +401,7 @@ Registro das atualizações anteriores, em ordem. O estado atual é o da seção
 - 2026-10-08: T-003 entrou em `main` pela PR #9 (`3e87c5f`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). Fim da sessão: branch `t-016-boundaries-test` aberta, T-016 não começada.
 - 2026-10-08: T-016 em `review` na branch `t-016-boundaries-test`. Open question nova: Q-19. Próxima pela ordem: T-019.
 - 2026-10-08: T-016 entrou em `main` pela PR #10 (`e1ee2b6`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). T-019 começada na branch `t-019-per-issuer-config`.
+- 2026-10-08: T-019 em `review` na mesma branch. Próxima pela ordem: T-004.
 
 ## §10 Decision log
 
@@ -557,6 +572,12 @@ Context: a DEC-017 aprovou B-1 a B-3 com um teste em G-1 que confira os imports 
 Decision: do agente (escolhas de implementação): (a) a checagem fica em `tests/boundaries.py`, um helper de teste, e não em `src/` nem num script: ela não é parte do produto e não precisa de gate próprio, porque roda em G-1; (b) lê o código com `ast`, da biblioteca padrão, sem importar os módulos e sem ferramenta nova; conta todo `import`, inclusive dentro de função, de `try` ou de `if TYPE_CHECKING`; (c) "biblioteca de rede" é uma lista fechada: da biblioteca padrão, `socket`, `socketserver`, `ssl`, `http.client`, `http.server`, `urllib.request`, `ftplib`, `smtplib`, `poplib`, `imaplib`, `telnetlib`, `xmlrpc`; de terceiros, `httpx`, `httpcore`, `requests`, `requests_pkcs12`, `urllib3`, `aiohttp`, `websockets`; `urllib.parse` e `http.HTTPStatus` passam; (d) "módulo de certificado" é `src.certificado`, `cryptography`, `OpenSSL`, `signxml` ou `xmlsec`; (e) a B-1 é transitiva dentro de `src/`: `src/dps.py` também não pode importar `src/client.py` nem um módulo que chegue a rede ou a certificado, e o `__init__.py` dos pacotes conta; a B-2 olha só o import direto, porque outros módulos podem usar o `client`; (f) `ssl` conta como rede, não como certificado.
 Alternatives: lista de imports permitidos por módulo, em vez de lista de proibidos (rejeitado: todo import novo exigiria mudar o teste, e os acceptance criteria pedem a proibição); import-linter ou ferramenta parecida (rejeitado: ferramenta nova, item de "perguntar", para três regras); importar os módulos e inspecionar `sys.modules` (rejeitado: executa código e depende da ordem dos testes).
 Consequences: §3, §8, §9. Limites: uma biblioteca de rede fora da lista passa despercebida, então quem instalar uma acrescenta o nome dela; import por nome em texto não é visto; `scripts/` não é conferido (Q-19). Como `ssl` está na lista, a T-004 não pode importá-lo em `src/certificado.py`; se precisar, volta ao humano.
+
+### DEC-029: Arquivo TOML por emitente em `emitentes/` (2026-10-08, T-019)
+Context: a T-019 pede um arquivo local por emitente, fora do git, com caminho do certificado, senha e dados fixos, lido só com a biblioteca padrão; um exemplo versionado; scripts que recebem o emitente; e a senha fora de `repr` e de mensagens de erro (INV-05).
+Decision: do agente (escolhas de implementação), apresentadas em plano e aprovadas pelo humano na conversa de 2026-10-08: (a) TOML, lido com `tomllib`; (b) pasta `emitentes/` na raiz, um `<nome>.toml` por emitente, com o nome restrito a `[a-z0-9_-]+`, o que também impede sair da pasta; `.gitignore` com `emitentes/*` e `!emitentes/exemplo.toml`; (c) chaves: `cnpj`, `municipio`, `inscricao_municipal` (a única opcional), `op_simp_nac`, `reg_esp_trib` e a seção `[certificado]` com `caminho` e `senha`; nenhuma tem default no código, e chave desconhecida é erro; (d) `scripts/gerar_dps.py` recebe `--emitente`, com padrão `exemplo`, para o comando do G-2 e a CI não mudarem; (e) as mensagens de erro citam o arquivo, a linha de um erro de sintaxe e as chaves que o módulo conhece, e nunca repetem valor nem nome de chave lidos do arquivo: a mensagem do `tomllib` é descartada e a exceção original não fica encadeada, porque ela pode trazer caracteres e nomes de chave do arquivo; (f) a regra de G-4 entra em `proibidos`, como as anteriores; (g) `op_simp_nac` e `reg_esp_trib` são conferidos contra as tabelas de §6; a recusa de Não Optante e MEI continua sendo da T-010, no modelo.
+Alternatives: JSON (rejeitado: sem comentários, e o arquivo é editado à mão); INI com `configparser` (rejeitado: tudo vira texto, sem tipos); um arquivo único com todos os emitentes (rejeitado: os critérios pedem um por emitente, e um erro de sintaxe derrubaria todos); `--emitente` obrigatório (rejeitado: mudaria o comando de um gate); pasta configurável por variável `NFSE_*` (rejeitado: o critério 1 limita o `.env` ao que é do ambiente); senha em variável de ambiente ou no cofre de credenciais do Windows (fora do escopo: os critérios pedem a senha no arquivo; a guarda no produto é a Q-17).
+Consequences: §3, §4, §5, §7, §8, §9. A senha fica em texto num arquivo local. O código de saída 2 de `scripts/gerar_dps.py` passa a cobrir também emitente não encontrado ou inválido. Quem errar o nome de uma chave não vê qual foi, só a seção e as chaves aceitas. O `.env` de máquinas já preparadas pode ainda ter as duas variáveis antigas, que são ignoradas. O formato do arquivo deve crescer na T-010 e na T-018.
 
 ## §11 Open questions
 

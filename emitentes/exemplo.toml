@@ -1,0 +1,15 @@
+# Modelo de arquivo de emitente. Dados FICTÍCIOS.
+#
+# Copie para emitentes/<nome>.toml (letras minúsculas, dígitos, '-' e '_') e preencha.
+# Só este exemplo é versionado: os demais arquivos da pasta ficam fora do git, porque
+# guardam a senha do certificado.
+
+cnpj = "11222333000181"
+municipio = "3304557"            # código IBGE do município do emitente (7 dígitos)
+inscricao_municipal = "12345"    # opcional: apague a linha se não houver
+op_simp_nac = 3                  # 1 = Não Optante, 2 = MEI, 3 = ME/EPP
+reg_esp_trib = 0                 # 0 = nenhum
+
+[certificado]
+caminho = "certs/exemplo.pfx"    # relativo à raiz do repositório, ou absoluto
+senha = "senha-ficticia"

@@ -78,6 +78,8 @@ Os valores completos estão em `docs/referencia/gov-docs/SHA256SUMS`, que `tests
 | manual-municipios-apis-adn-sistema-nacional-nfs-e-v1-2-out21025.pdf | 1e1463e68aa56dbd |
 | manual-municipios-cnc-api-sistema-nacional-nfs-e-v1-2-out21025.pdf | 378624952822e466 |
 | manual-municipios-emissor-publico-api-sistema-nacional-nfs-e-v1-2-out21025.pdf | 3b5e982be9298ecc |
+| 2026-10-08 | `tomllib` faz parte da biblioteca padrão e só lê TOML | Módulo presente no Python do projeto; expõe `load`, `loads` e `TOMLDecodeError` (subclasse de `ValueError`) | Python 3.11.9 | Fonte instalada, `Lib/tomllib/__init__.py` e `_parser.py` |
+| 2026-10-08 | A mensagem de `TOMLDecodeError` pode repetir conteúdo do arquivo e termina com a posição | Ex.: `Found invalid character {src[pos]!r}`, `Illegal character {char!r}`, `Cannot declare {key} twice`; sufixo `(at line N, column M)` ou `(at end of document)` | Python 3.11.9 | Fonte instalada, `Lib/tomllib/_parser.py`, linhas 259, 290 e 580, e `suffixed_err` |
 
 ## Copied code
 | Date       | Our path            | Origin (URL + commit) | License | Task  |
