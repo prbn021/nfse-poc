@@ -57,7 +57,10 @@ class EnvioIncerto(Exception):
 class Resultado:
     nfse: NfseEmitida
     problemas: list[str] = field(default_factory=list)  # da conferência; a nota já existe
-    recuperada: bool = False  # True: obtida pela consulta depois de uma queda no envio
+    recuperada: bool = False  # True: obtida pela consulta depois de uma falha no envio
+    # A falha que levou à recuperação (queda, resposta ilegível ou 5xx), para quem chamou
+    # mostrar a causa e salvar a resposta bruta (DEC-044).
+    falha: Exception | None = field(default=None, repr=False, compare=False)
 
 
 def _id_da_dps_assinada(xml: bytes) -> str:
@@ -118,4 +121,4 @@ def emitir(cliente: Cliente, dps_assinada: bytes, xsd_nfse: Path) -> Resultado:
     if nfse.id_dps != id_dps:
         raise RespostaInesperada(201, "idDps devolvido não é o da DPS enviada")
     problemas = conferir_nfse(nfse.xml, chave=nfse.chave, id_dps=id_dps, xsd=xsd_nfse)
-    return Resultado(nfse=nfse, problemas=problemas, recuperada=recuperada)
+    return Resultado(nfse=nfse, problemas=problemas, recuperada=recuperada, falha=falha)

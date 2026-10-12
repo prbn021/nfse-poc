@@ -53,6 +53,17 @@ def _salvar_resposta(saida: Path, id_dps: str, erro: RejeicaoApi | RespostaInesp
     print(f"Resposta completa da SEFIN: {arquivo}", file=sys.stderr)
 
 
+def _causa(falha: Exception | None) -> str:
+    """Por que a nota veio pela recuperação (DEC-044)."""
+    if isinstance(falha, RespostaInesperada):
+        detalhe = f"HTTP {falha.status}: {falha.motivo}"
+        return f"a resposta do envio veio fora do formato esperado ({detalhe})"
+    if isinstance(falha, RejeicaoApi):
+        mensagens = "; ".join(str(m) for m in falha.mensagens) or "sem mensagens"
+        return f"a SEFIN respondeu com erro (HTTP {falha.status}: {mensagens})"
+    return f"a conexão caiu no envio ({falha})"
+
+
 def main(
     argv: list[str] | None = None,
     pasta: Path = PASTA,
@@ -157,7 +168,9 @@ def main(
     arquivo = saida / f"NFSe{nfse.chave}.xml"
     arquivo.write_bytes(nfse.xml)
     if resultado.recuperada:
-        print("[!] A conexão caiu no envio; a NFS-e foi recuperada pela consulta da DPS")
+        print(f"[!] {_causa(resultado.falha)}; a NFS-e foi recuperada pela consulta da DPS")
+        if isinstance(resultado.falha, (RejeicaoApi, RespostaInesperada)):
+            _salvar_resposta(saida, dps.id, resultado.falha)
     print(f"Chave de acesso: {nfse.chave}")
     print(f"NFS-e: {arquivo}")
     for alerta in nfse.alertas:

@@ -161,6 +161,13 @@ def test_resposta_que_pode_esconder_nota_gerada_recupera_a_nota(dps_assinada, nf
     assert _nomes(dubl) == ["chave_da_dps", "emitir", "chave_da_dps", "obter_nfse"]
     assert resultado.recuperada is True
     assert resultado.nfse.chave == CHAVE
+    # A causa da recuperação fica no resultado (DEC-044).
+    assert resultado.falha is falha
+
+
+def test_sem_recuperacao_nao_ha_falha(dps_assinada, nfse, xsd):
+    resultado = emitir(Dubl(envio=_emitida(nfse)), dps_assinada, xsd)
+    assert resultado.falha is None
 
 
 @pytest.mark.parametrize(
