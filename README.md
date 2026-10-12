@@ -124,6 +124,12 @@ Para consultar no ADN se um município está parametrizado e administra um códi
 
 Só consultas, em produção restrita. Mostra o convênio do município (o do emitente, ou o de `--municipio`) e o histórico de alíquotas do código com o desdobramento `000`, em 9 dígitos e no formato pontuado (`04.12.01.000`), e grava as respostas em `out\adn-<município>-…json`. Os campos aparecem como a API os devolve; a especificação não descreve os valores 0, 1 e -1.
 
+Com `--varrer` no lugar de `--c-trib-nac`, o script consulta o histórico de alíquotas de todos os códigos da lista nacional de serviços (Anexo B, cerca de 340, um por vez) e mostra os que o município tem; o status de cada código vai para `out\adn-<município>-varredura.json`:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\consultar_parametros.py --emitente minha-empresa --varrer
+```
+
 Para assinar a DPS de exemplo com o certificado de um emitente e empacotá-la em GZip+Base64:
 
 ```powershell

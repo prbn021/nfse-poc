@@ -155,7 +155,88 @@ def test_codigos_fora_do_formato(emitentes, tmp_path, capsys, args):
     assert pedidos == []
 
 
-@pytest.mark.parametrize("argv", [[], ["--emitente", "acme"], ["--c-trib-nac", "990101"]])
+# --- varredura da lista nacional (T-026, DEC-042) -----------------------------------------
+
+LISTA_FICTICIA = [
+    ("990101", "Serviço fictício A."),
+    ("990102", "Serviço fictício B."),
+    ("990103", "Serviço fictício C."),
+]
+
+
+def rodar_varredura(emitentes, tmp_path, transporte, monkeypatch, *args):
+    monkeypatch.setattr(consultar_parametros, "servicos_nacionais", lambda _: LISTA_FICTICIA)
+    return consultar_parametros.main(
+        ["--emitente", "acme", "--varrer", *args],
+        pasta=emitentes,
+        config=config(),
+        transporte=transporte,
+        saida=tmp_path / "out",
+    )
+
+
+def test_varredura_lista_os_codigos_com_aliquota(emitentes, tmp_path, capsys, monkeypatch):
+    pedidos = []
+    respostas = {
+        "3304557/convenio": httpx.Response(200, json=CONVENIO),
+        "3304557/99.01.02.000/historicoaliquotas": httpx.Response(
+            200,
+            json={
+                "mensagem": None,
+                "aliquotas": {"99.01.02.000": [{"Aliq": 2.0, "DtIni": "2025-01-01T00:00:00"}]},
+            },
+        ),
+        "3304557/99.01.03.000/historicoaliquotas": httpx.Response(
+            400, json={"mensagem": "Chamada mal formada."}
+        ),
+    }
+    assert rodar_varredura(emitentes, tmp_path, adn(pedidos, respostas=respostas), monkeypatch) == 0
+    assert pedidos == [
+        "/parametrizacao/3304557/convenio",
+        "/parametrizacao/3304557/99.01.01.000/historicoaliquotas",
+        "/parametrizacao/3304557/99.01.02.000/historicoaliquotas",
+        "/parametrizacao/3304557/99.01.03.000/historicoaliquotas",
+    ]
+    out = capsys.readouterr().out
+    assert (
+        "Varredura de 3 códigos em 3304557: 1 com alíquota, 1 sem (404), 1 com outro status" in out
+    )
+    assert "990102 Serviço fictício B.: Aliq=2.0, DtIni=2025-01-01T00:00:00" in out
+    assert "990103: HTTP 400 (Chamada mal formada.)" in out
+
+    resumo = json.loads((tmp_path / "out" / "adn-3304557-varredura.json").read_text("utf-8"))
+    assert [item["codigo"] for item in resumo] == ["990101", "990102", "990103"]
+    assert [item["status"] for item in resumo] == [404, 200, 400]
+    assert resumo[1]["aliquotas"] == {
+        "99.01.02.000": [{"Aliq": 2.0, "DtIni": "2025-01-01T00:00:00"}]
+    }
+
+
+def test_varredura_sem_nenhum_codigo(emitentes, tmp_path, capsys, monkeypatch):
+    assert rodar_varredura(emitentes, tmp_path, adn([], respostas={}), monkeypatch) == 0
+    assert "nenhum código com alíquota" in capsys.readouterr().out
+
+
+def test_varredura_para_no_erro_de_rede(emitentes, tmp_path, capsys, monkeypatch):
+    respostas = {
+        "3304557/convenio": httpx.Response(200, json=CONVENIO),
+        "3304557/99.01.02.000/historicoaliquotas": httpx.ConnectError("simulado"),
+    }
+    transporte = adn([], respostas=respostas)
+    codigo = rodar_varredura(emitentes, tmp_path, transporte, monkeypatch)
+    assert codigo == consultar_parametros.ERRO_DE_REDE
+    assert "erro de conexão" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        [],
+        ["--emitente", "acme"],
+        ["--c-trib-nac", "990101"],
+        ["--emitente", "acme", "--c-trib-nac", "990101", "--varrer"],
+    ],
+)
 def test_emitente_e_codigo_sao_obrigatorios(argv):
     with pytest.raises(SystemExit) as saida:
         consultar_parametros.main(argv)
