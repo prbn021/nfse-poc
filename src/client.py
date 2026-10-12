@@ -159,9 +159,10 @@ class ClienteNfse:
         with _anexar_corpo(resposta):
             if resposta.status == 201:
                 corpo = _objeto_json(resposta)
+                chave = _chave(resposta.status, corpo)
                 return NfseEmitida(
-                    chave=_chave(resposta.status, corpo),
-                    id_dps=_id_dps(resposta.status, corpo),
+                    chave=chave,
+                    id_dps=_id_dps(resposta.status, corpo, chave),
                     xml=_nfse_xml(resposta.status, corpo),
                     alertas=_mensagens(resposta.status, corpo.get("alertas"), "alertas"),
                 )
@@ -241,11 +242,19 @@ def _chave(status: int, corpo: dict) -> str:
     return chave
 
 
-def _id_dps(status: int, corpo: dict) -> str:
+def _id_dps(status: int, corpo: dict, chave: str) -> str | None:
+    """O Id da DPS, se a resposta o trouxer.
+
+    A especificação descreve `idDps` como o Id da DPS, mas a SEFIN real devolve nele o Id da
+    NFS-e, "NFS" + chave (DEC-045): nesse caso não há Id da DPS, e quem confere a DPS é a
+    conferência da nota (`src/nfse.py`). Qualquer outro valor é resposta inesperada.
+    """
     id_dps = corpo.get("iddps")
-    if not isinstance(id_dps, str) or not _ID_DPS.fullmatch(id_dps):
-        raise RespostaInesperada(status, "idDps ausente ou fora do formato")
-    return id_dps
+    if isinstance(id_dps, str) and _ID_DPS.fullmatch(id_dps):
+        return id_dps
+    if id_dps == f"NFS{chave}":
+        return None
+    raise RespostaInesperada(status, "idDps ausente ou fora do formato")
 
 
 def _nfse_xml(status: int, corpo: dict) -> bytes:
