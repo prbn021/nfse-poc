@@ -509,6 +509,7 @@ Registro das atualizações anteriores, em ordem. O estado atual é o da seção
 - 2026-10-12: a página do ADN respondeu 200, mas o link da especificação fica num `index.js` local; o `testar_conexao.py` passou a procurar o link nos scripts locais da página. O humano vai rodar de novo.
 - 2026-10-12: especificação do ADN baixada pelo humano; caminho base da parametrização fechado em §6. Itens 2 a 5 da T-026 feitos (DEC-040); T-026 em `review` na mesma branch. Pendente do humano: rodar `scripts\consultar_parametros.py --emitente <nome> --c-trib-nac <código>` e passar a saída, que diz se o município administra o código.
 - 2026-10-12: primeira consulta real: convênio do Rio aderido; histórico de alíquotas recusou 6 e 9 dígitos. O script passou a tentar 9 dígitos e o formato pontuado (DEC-041); o humano vai rodar de novo.
+- 2026-10-12: segunda consulta: o formato pontuado é aceito, e o Rio não tem alíquota parametrizada para o código do serviço do emitente na produção restrita (404). Provável causa do E0312. Próximo passo é decisão do humano.
 
 ## §10 Decision log
 
