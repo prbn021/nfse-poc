@@ -50,7 +50,7 @@ Non-goals:
 - ISS por fora do Simples (`regApTribSN` 2 ou 3): recusado por enquanto; T-023.
 - API (FastAPI): só depois da PoC, segundo o `README.md`.
 
-Critério de sucesso do M1: G-1 e G-2 passam, com T-010 e T-014 `done` (DEC-016). Cumprido e confirmado pelo humano em 2026-10-09. Critério do M2, aprovado pelo humano em 2026-10-12 (Q-22, DEC-035): G-1 e G-2 passam com T-005 e T-006 `done`, e a DPS de exemplo sai assinada e codificada em GZip+Base64, com a assinatura conferida por um teste. Cumprido e confirmado pelo humano em 2026-10-12 (DEC-036). Critério do milestone atual (M3), aprovado pelo humano em 2026-10-12 (DEC-036): G-1 e G-2 passam com T-007 `done`, e uma DPS do exemplo é aceita em produção restrita, com a NFS-e de retorno decodificada, validada contra o XSD e salva em `out/`. Cumprido em 2026-10-12: primeira NFS-e autorizada (`cStat` 100) pelo `emitir.py`, conferida e salva, ainda que pelo caminho de recuperação (DEC-044); falta o humano confirmar o fechamento do M3.
+Critério de sucesso do M1: G-1 e G-2 passam, com T-010 e T-014 `done` (DEC-016). Cumprido e confirmado pelo humano em 2026-10-09. Critério do M2, aprovado pelo humano em 2026-10-12 (Q-22, DEC-035): G-1 e G-2 passam com T-005 e T-006 `done`, e a DPS de exemplo sai assinada e codificada em GZip+Base64, com a assinatura conferida por um teste. Cumprido e confirmado pelo humano em 2026-10-12 (DEC-036). Critério do milestone atual (M3), aprovado pelo humano em 2026-10-12 (DEC-036): G-1 e G-2 passam com T-007 `done`, e uma DPS do exemplo é aceita em produção restrita, com a NFS-e de retorno decodificada, validada contra o XSD e salva em `out/`. Cumprido em 2026-10-12: primeira NFS-e autorizada (`cStat` 100) pelo `emitir.py`, conferida e salva, ainda que pelo caminho de recuperação (DEC-044); a terceira, no mesmo dia, com o 201 lido direto (DEC-045). Falta o humano confirmar o fechamento do M3.
 
 ## §2 Claims policy
 
@@ -516,6 +516,7 @@ Registro das atualizações anteriores, em ordem. O estado atual é o da seção
 - 2026-10-12: com o desdobramento da nota real, o código do serviço do emitente tem alíquota vigente no Rio (formato pontuado; 9 dígitos de novo recusado). `--c-trib-mun` no `emitir.py`, feito na branch da T-007 e trazido para a da T-026 por merge (DEC-043). Pendente do humano: emitir de novo com `--c-trib-nac` e `--c-trib-mun` do serviço do emitente.
 - 2026-10-12: com o `cTribMun` descoberto na T-026 (DEC-043), primeira NFS-e autorizada em produção restrita (`cStat` 100), conferida e salva pelo `emitir.py`, mas pelo caminho de recuperação. Fechados o perfil de assinatura e o formato de `serie` (Q-11). Causa da recuperação na saída do script (DEC-044). Critério do M3 cumprido; T-007 e M3 aguardam o humano.
 - 2026-10-12: segunda NFS-e autorizada, também pela recuperação; a causa, agora mostrada, foi o `idDps` do 201 com o Id da NFS-e. Leitura corrigida (DEC-045). Falta um envio lido direto para comprovar o caminho de sucesso.
+- 2026-10-12: terceira NFS-e autorizada, com o 201 lido direto, sem recuperação, conferida e salva. Caminho de sucesso comprovado. T-007, T-026 e o fechamento do M3 aguardam o humano.
 
 ## §10 Decision log
 
@@ -817,7 +818,7 @@ Consequences: §3. Só um novo envio mostra a causa; até lá, as notas continua
 Context: com a DEC-044, a segunda NFS-e autorizada em produção restrita mostrou por que o 201 não era lido: o campo `idDps` veio com o Id da NFS-e ("NFS" + a chave de acesso), e não com o Id da DPS, como diz a especificação (docs/SOURCES.md). O cliente exigia o formato da DPS e tratava o sucesso como resposta inesperada; a nota chegava pela recuperação.
 Decision: do agente, por ser uma API que não se comporta como a especificação supunha: o cliente aceita em `idDps` o Id da DPS ou "NFS" + a chave devolvida no mesmo corpo; no segundo caso, `NfseEmitida.id_dps` fica None, e `src/emissao.py` só compara Ids quando a resposta traz o da DPS. Qualquer outro valor continua sendo resposta inesperada. A garantia de que a nota é da DPS enviada fica com a conferência (`src/nfse.py`), que compara o Id da DPS embutida e o Id da nota com a chave.
 Alternatives: ignorar `idDps` de vez (rejeitado: um valor que não é nem da DPS nem da nota indica resposta errada, e merece parar).
-Consequences: §3. O caminho de sucesso só fica comprovado com um envio real lido direto, sem recuperação.
+Consequences: §3. Comprovado em 2026-10-12: a terceira NFS-e autorizada teve o 201 lido direto, sem recuperação.
 
 ## §11 Open questions
 
