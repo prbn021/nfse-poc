@@ -137,6 +137,29 @@ def test_dps_enviada_tem_o_numero_pedido_sem_ctribmun_e_assinada(emitentes, tmp_
     assert raiz.find("{http://www.w3.org/2000/09/xmldsig#}Signature") is not None
 
 
+def test_codigo_de_tributacao_nacional_vem_do_argumento(emitentes, tmp_path):
+    # Fictício para o teste; na emissão real, o código do serviço do emitente (DEC-038).
+    servidor = Servidor()
+    assert rodar(emitentes, tmp_path, servidor, "--c-trib-nac", "990101") == 0
+    inf = etree.fromstring(servidor.dps_recebida).find("n:infDPS", N)
+    assert inf.findtext("n:serv/n:cServ/n:cTribNac", namespaces=N) == "990101"
+
+
+def test_sem_o_argumento_usa_o_codigo_do_exemplo(emitentes, tmp_path):
+    servidor = Servidor()
+    assert rodar(emitentes, tmp_path, servidor) == 0
+    inf = etree.fromstring(servidor.dps_recebida).find("n:infDPS", N)
+    assert inf.findtext("n:serv/n:cServ/n:cTribNac", namespaces=N) == "010101"
+
+
+@pytest.mark.parametrize("codigo", ["12", "abcdef", "1234567"])
+def test_codigo_de_tributacao_invalido_nao_envia(emitentes, tmp_path, capsys, codigo):
+    servidor = Servidor()
+    assert rodar(emitentes, tmp_path, servidor, "--c-trib-nac", codigo) == 1
+    assert servidor.pedidos == []
+    assert "c_trib_nac" in capsys.readouterr().err
+
+
 def test_rejeicao_mostra_os_codigos_e_nao_salva_nfse(emitentes, tmp_path, capsys):
     resposta = httpx.Response(
         400,
