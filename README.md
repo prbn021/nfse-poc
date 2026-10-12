@@ -116,6 +116,14 @@ Com `--api parametrizacao`, o mesmo script baixa a página de documentação e a
 .\.venv\Scripts\python.exe scripts\testar_conexao.py --emitente minha-empresa --api parametrizacao
 ```
 
+Para consultar no ADN se um município está parametrizado e administra um código de serviço (a causa do E0312):
+
+```powershell
+.\.venv\Scripts\python.exe scripts\consultar_parametros.py --emitente minha-empresa --c-trib-nac 123456
+```
+
+Só consultas, em produção restrita. Mostra o convênio do município (o do emitente, ou o de `--municipio`) e o histórico de alíquotas do código com o desdobramento `000` e sem ele, e grava as respostas em `out\adn-<município>-…json`. Os campos aparecem como a API os devolve; a especificação não descreve os valores 0, 1 e -1.
+
 Para assinar a DPS de exemplo com o certificado de um emitente e empacotá-la em GZip+Base64:
 
 ```powershell

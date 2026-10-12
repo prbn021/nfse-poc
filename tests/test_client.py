@@ -207,6 +207,75 @@ def test_api_desconhecida(cert):
         ClienteNfse(config(), cert, api="outra", transporte=transporte(httpx.Response(200)))
 
 
+# --- parametrização municipal no ADN (T-026) ----------------------------------------------
+
+ADN = "https://adn.producaorestrita.nfse.gov.br"
+
+
+def cliente_adn(cert, resposta, pedidos=None):
+    return ClienteNfse(config(), cert, api="adn", transporte=transporte(resposta, pedidos))
+
+
+@pytest.mark.parametrize("status", [200, 400, 404])
+def test_convenio_devolve_status_e_corpo(cert, status):
+    pedidos = []
+    corpo = {"mensagem": "ok", "parametrosConvenio": {"aderenteEmissorNacional": 1}}
+    with cliente_adn(cert, json_resposta(status, corpo), pedidos) as cliente:
+        consulta = cliente.convenio("3304557")
+    assert [(p.method, str(p.url)) for p in pedidos] == [
+        ("GET", f"{ADN}/parametrizacao/3304557/convenio")
+    ]
+    assert consulta.status == status
+    assert consulta.corpo["parametrosconvenio"] == {"aderenteEmissorNacional": 1}
+    assert consulta.mensagem == "ok"
+
+
+def test_historico_de_aliquotas(cert):
+    pedidos = []
+    corpo = {"Mensagem": None, "Aliquotas": {"041201000": [{"Aliq": 5.0}]}}
+    with cliente_adn(cert, json_resposta(200, corpo), pedidos) as cliente:
+        consulta = cliente.historico_aliquotas("3304557", "041201000")
+    assert str(pedidos[0].url) == f"{ADN}/parametrizacao/3304557/041201000/historicoaliquotas"
+    assert consulta.corpo["aliquotas"] == {"041201000": [{"Aliq": 5.0}]}
+    assert consulta.mensagem is None
+
+
+@pytest.mark.parametrize(
+    ("municipio", "codigo"),
+    [
+        ("330455", "041201"),
+        ("33045570", "041201"),
+        ("abc4557", "041201"),
+        ("3304557", "04120"),
+        ("3304557", "0412010"),
+        ("3304557", "04/201"),
+    ],
+)
+def test_consultas_recusam_codigos_fora_do_formato(cert, municipio, codigo):
+    pedidos = []
+    with cliente_adn(cert, httpx.Response(200), pedidos) as cliente, pytest.raises(ValueError):
+        cliente.historico_aliquotas(municipio, codigo)
+    assert pedidos == []
+
+
+@pytest.mark.parametrize(
+    "resposta",
+    [httpx.Response(500, content=b"erro"), httpx.Response(200, content=b"<html/>")],
+)
+def test_consulta_de_parametros_inesperada(cert, resposta):
+    with cliente_adn(cert, resposta) as cliente, pytest.raises(RespostaInesperada) as erro:
+        cliente.convenio("3304557")
+    assert erro.value.corpo == resposta.content
+
+
+def test_consultas_de_parametros_so_no_adn(cert):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(httpx.Response(200))) as cliente,
+        pytest.raises(ValueError, match="ADN"),
+    ):
+        cliente.convenio("3304557")
+
+
 def test_aceita_a_url_da_producao_restrita(cert):
     with ClienteNfse(config(), cert, transporte=transporte(httpx.Response(200))) as cliente:
         assert cliente.sefin_url == BASE

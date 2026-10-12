@@ -32,6 +32,9 @@ TEMPO_LIMITE = 30.0  # segundos
 
 _ID_DPS = re.compile(r"DPS\d{42}")
 _CHAVE = re.compile(r"\d{50}")
+_MUNICIPIO = re.compile(r"\d{7}")
+_CODIGO_SERVICO = re.compile(r"\d{6}|\d{9}")
+_PARAMETRIZACAO = "parametrizacao"  # caminho da API de parâmetros municipais no ADN
 _CAMINHO = re.compile(r"[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*")
 
 
@@ -44,6 +47,19 @@ class Resposta:
     status: int
     tipo: str  # Content-Type, sem parâmetros
     corpo: bytes = field(repr=False)
+
+
+@dataclass(frozen=True)
+class ConsultaParametros:
+    """Resposta de uma consulta de parâmetros municipais no ADN (T-026)."""
+
+    status: int
+    corpo: dict = field(repr=False)  # chaves do primeiro nível em minúsculas
+    bruto: bytes = field(repr=False)
+
+    @property
+    def mensagem(self) -> str | None:
+        return _texto(self.corpo.get("mensagem"))
 
 
 def contexto_tls(cert: Certificado) -> ssl.SSLContext:
@@ -216,6 +232,38 @@ class ClienteNfse:
                 raise _rejeicao(resposta)
             raise RespostaInesperada(
                 resposta.status, f"HTTP {resposta.status} não previsto na consulta"
+            )
+
+    def convenio(self, municipio: str) -> ConsultaParametros:
+        """`GET /parametrizacao/{municipio}/convenio` no ADN (T-026)."""
+        self._conferir_parametros(municipio)
+        return self._parametros(f"{municipio}/convenio")
+
+    def historico_aliquotas(self, municipio: str, codigo_servico: str) -> ConsultaParametros:
+        """`GET /parametrizacao/{municipio}/{codigo}/historicoaliquotas` no ADN (T-026).
+
+        A especificação não diz o formato de `codigoServico`: aceita o `cTribNac` (6 dígitos)
+        ou ele com o desdobramento municipal (9 dígitos), e quem chama escolhe.
+        """
+        self._conferir_parametros(municipio)
+        if not _CODIGO_SERVICO.fullmatch(codigo_servico):
+            raise ValueError("código de serviço fora do formato: 6 ou 9 dígitos")
+        return self._parametros(f"{municipio}/{codigo_servico}/historicoaliquotas")
+
+    def _conferir_parametros(self, municipio: str) -> None:
+        if self.api != "adn":
+            raise ValueError("parâmetros municipais ficam no ADN: crie o cliente com api='adn'")
+        if not _MUNICIPIO.fullmatch(municipio):
+            raise ValueError("código do município fora do formato: 7 dígitos (IBGE)")
+
+    def _parametros(self, caminho: str) -> ConsultaParametros:
+        resposta = self._pedir("GET", f"{_PARAMETRIZACAO}/{caminho}")
+        with _anexar_corpo(resposta):
+            # 400 e 404 também trazem corpo com `mensagem` (especificação do ADN).
+            if resposta.status in (200, 400, 404):
+                return ConsultaParametros(resposta.status, _objeto_json(resposta), resposta.corpo)
+            raise RespostaInesperada(
+                resposta.status, f"HTTP {resposta.status} não previsto na consulta de parâmetros"
             )
 
     def _pedir(self, metodo: str, caminho: str, *, corpo_json: dict | None = None) -> Resposta:
