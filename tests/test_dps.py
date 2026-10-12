@@ -8,8 +8,11 @@ from lxml import etree
 
 from src.config import RAIZ
 from src.dps import (
+    CODIGOS_DE_OBRA,
     NS,
     Dps,
+    EnderecoObra,
+    Obra,
     PisCofins,
     Prestador,
     Servico,
@@ -266,7 +269,14 @@ def test_nenhum_default_de_src_carrega_dado_de_emitente():
     # restantes são do leiaute ou da nota, não de um emitente.
     assert _defaults(Prestador) == {}
     assert _defaults(Tomador) == {"cnpj": None, "cpf": None}
-    assert _defaults(Servico) == {"c_trib_mun": None}
+    assert _defaults(Servico) == {"c_trib_mun": None, "obra": None}
+    assert _defaults(Obra) == {
+        "c_obra": None,
+        "c_cib": None,
+        "endereco": None,
+        "insc_imob_fisc": None,
+    }
+    assert _defaults(EnderecoObra) == {"complemento": None}
     assert _defaults(Valores) == {
         "trib_issqn": 1,
         "tp_ret_issqn": 1,
@@ -401,3 +411,164 @@ def test_email_com_mais_de_80_caracteres_e_recusado():
 def test_fone_fora_do_padrao_e_recusado(fone):
     with pytest.raises(ValueError, match="fone"):
         _prestador(fone=fone)
+
+
+# --- grupo de obra (T-020, DEC-047) ----------------------------------------------------------
+
+# Dados FICTÍCIOS.
+CNO = "900000000001"
+CIB = "1234567X"
+ENDERECO_OBRA = EnderecoObra(
+    cep="20000000", logradouro="Rua Fictícia", numero="100", bairro="Centro"
+)
+# Anexo I v1.01, E0370: os 13 subitens que exigem o grupo de obra.
+SUBITENS_DE_OBRA = [
+    "070201", "070202", "070401", "070501", "070502", "070601", "070602",
+    "070701", "070801", "071701", "071901", "141403", "141404",
+]  # fmt: skip
+
+
+def _servico(c_trib_nac="070202", **over) -> Servico:
+    base = dict(c_loc_prestacao="3304557", c_trib_nac=c_trib_nac, descricao="Obra")
+    base.update(over)
+    return Servico(**base)
+
+
+def test_lista_de_codigos_de_obra_e_a_do_anexo_i():
+    assert sorted(CODIGOS_DE_OBRA) == SUBITENS_DE_OBRA
+
+
+@pytest.mark.parametrize("codigo", SUBITENS_DE_OBRA)
+def test_codigo_de_obra_sem_o_grupo_e_recusado(codigo):
+    with pytest.raises(ValueError, match="E0370"):
+        _servico(codigo)
+
+
+@pytest.mark.parametrize("codigo", SUBITENS_DE_OBRA)
+def test_codigo_de_obra_com_o_grupo_e_valido(xsd, codigo):
+    dps = _dps(servico=_servico(codigo, obra=Obra(c_obra=CNO)))
+    assert validar_xml(para_xml(dps), xsd) == []
+
+
+@pytest.mark.parametrize("codigo", ["010101", "070301", "070901", "141401"])
+def test_grupo_de_obra_com_outro_codigo_e_recusado(codigo):
+    with pytest.raises(ValueError, match="E0372"):
+        _servico(codigo, obra=Obra(c_obra=CNO))
+
+
+def test_codigo_990101_aceita_o_grupo_de_obra(xsd):
+    # Exceção da E0372.
+    dps = _dps(servico=_servico("990101", obra=Obra(c_obra=CNO)))
+    assert validar_xml(para_xml(dps), xsd) == []
+
+
+def test_codigo_990101_sem_o_grupo_tambem_e_aceito():
+    assert _servico("990101").obra is None
+
+
+@pytest.mark.parametrize(
+    ("obra", "filhos"),
+    [
+        (Obra(c_obra=CNO), ["cObra"]),
+        (Obra(c_cib=CIB), ["cCIB"]),
+        (Obra(endereco=ENDERECO_OBRA), ["end"]),
+        (Obra(c_obra=CNO, insc_imob_fisc="IMOB-123"), ["inscImobFisc", "cObra"]),
+    ],
+    ids=["cno", "cib", "endereco", "com-inscricao-imobiliaria"],
+)
+def test_grupo_de_obra_na_posicao_do_xsd(xsd, obra, filhos):
+    xml = para_xml(_dps(servico=_servico(obra=obra, c_trib_mun="001")))
+    assert validar_xml(xml, xsd) == []
+    raiz = etree.fromstring(xml)
+    assert _filhos(raiz, "n:infDPS/n:serv") == ["locPrest", "cServ", "obra"]
+    assert _filhos(raiz, "n:infDPS/n:serv/n:obra") == filhos
+
+
+def test_endereco_da_obra_no_xml(xsd):
+    endereco = dataclasses.replace(ENDERECO_OBRA, complemento="Bloco A")
+    xml = para_xml(_dps(servico=_servico(obra=Obra(endereco=endereco))))
+    assert validar_xml(xml, xsd) == []
+    end = etree.fromstring(xml).find("n:infDPS/n:serv/n:obra/n:end", N)
+    assert [etree.QName(el).localname for el in end] == ["CEP", "xLgr", "nro", "xCpl", "xBairro"]
+    assert [el.text for el in end] == ["20000000", "Rua Fictícia", "100", "Bloco A", "Centro"]
+
+
+def test_sem_obra_o_xml_continua_igual_ao_golden():
+    assert para_xml(_dps()) == GOLDEN.read_bytes()
+
+
+def test_obra_sem_identificacao_e_recusada():
+    with pytest.raises(ValueError, match="exatamente uma"):
+        Obra()
+
+
+@pytest.mark.parametrize(
+    "campos",
+    [
+        dict(c_obra=CNO, c_cib=CIB),
+        dict(c_obra=CNO, endereco=ENDERECO_OBRA),
+        dict(c_cib=CIB, endereco=ENDERECO_OBRA),
+        dict(c_obra=CNO, c_cib=CIB, endereco=ENDERECO_OBRA),
+    ],
+)
+def test_obra_com_mais_de_uma_identificacao_e_recusada(campos):
+    with pytest.raises(ValueError, match="exatamente uma"):
+        Obra(**campos)
+
+
+@pytest.mark.parametrize("cib", ["1234567", "123456789", ""])
+def test_cib_fora_de_8_caracteres_e_recusado(cib):
+    # Só o tamanho: o DV (E0373) fica com o servidor (DEC-047).
+    with pytest.raises(ValueError, match="c_cib"):
+        Obra(c_cib=cib)
+
+
+@pytest.mark.parametrize("c_obra", ["", "   ", "1" * 31])
+def test_cno_vazio_ou_longo_demais_e_recusado(c_obra):
+    with pytest.raises(ValueError, match="c_obra"):
+        Obra(c_obra=c_obra)
+
+
+@pytest.mark.parametrize("insc", ["", "   ", "1" * 31])
+def test_inscricao_imobiliaria_vazia_ou_longa_demais_e_recusada(insc):
+    with pytest.raises(ValueError, match="insc_imob_fisc"):
+        Obra(c_obra=CNO, insc_imob_fisc=insc)
+
+
+@pytest.mark.parametrize("cep", ["2000000", "200000000", "20000-00", "abcdefgh", ""])
+def test_cep_da_obra_fora_de_8_digitos_e_recusado(cep):
+    with pytest.raises(ValueError, match="cep"):
+        dataclasses.replace(ENDERECO_OBRA, cep=cep)
+
+
+def test_endereco_da_obra_no_exterior_ainda_nao_suportado():
+    # E0384: obra no exterior usa endExt, sem CEP; fica para a T-022.
+    with pytest.raises(ValueError, match=r"exterior.*ainda não suportado.*T-022"):
+        dataclasses.replace(ENDERECO_OBRA, cep=None)
+
+
+@pytest.mark.parametrize(
+    ("campo", "maximo"),
+    [("logradouro", 255), ("numero", 60), ("complemento", 156), ("bairro", 60)],
+)
+def test_campos_do_endereco_longos_demais_sao_recusados(campo, maximo):
+    with pytest.raises(ValueError, match=campo):
+        dataclasses.replace(ENDERECO_OBRA, **{campo: "a" * (maximo + 1)})
+
+
+@pytest.mark.parametrize("campo", ["logradouro", "numero", "complemento", "bairro"])
+@pytest.mark.parametrize("valor", ["", "   ", " Centro", "Centro "])
+def test_campos_do_endereco_vazios_ou_com_espaco_nas_pontas_sao_recusados(campo, valor):
+    # TSString: sem espaço no início nem no fim.
+    with pytest.raises(ValueError, match=campo):
+        dataclasses.replace(ENDERECO_OBRA, **{campo: valor})
+
+
+@pytest.mark.parametrize(
+    ("campo", "maximo"),
+    [("logradouro", 255), ("numero", 60), ("complemento", 156), ("bairro", 60)],
+)
+def test_campos_do_endereco_no_tamanho_maximo_sao_validos(xsd, campo, maximo):
+    endereco = dataclasses.replace(ENDERECO_OBRA, **{campo: "a" * maximo})
+    xml = para_xml(_dps(servico=_servico(obra=Obra(endereco=endereco))))
+    assert validar_xml(xml, xsd) == []

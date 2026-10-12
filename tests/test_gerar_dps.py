@@ -80,3 +80,42 @@ def test_ptottribsn_invalido_sai_com_erro_claro(capsys, valor):
         gerar_dps.main(["--p-tot-trib-sn", valor])
     assert saida.value.code == 2
     assert "p_tot_trib_sn" in capsys.readouterr().err
+
+
+# --- obra (T-020, DEC-047) -------------------------------------------------------------------
+
+CNO_FICTICIO = "900000000001"
+
+
+def test_exemplo_sem_obra_nao_tem_o_grupo():
+    assert gerar_dps.dps_exemplo(2, carregar_emitente("exemplo")).servico.obra is None
+
+
+def test_obra_e_codigo_vem_dos_argumentos():
+    dps = gerar_dps.dps_exemplo(
+        2, carregar_emitente("exemplo"), c_trib_nac="070202", obra_cno=CNO_FICTICIO
+    )
+    assert dps.servico.c_trib_nac == "070202"
+    assert dps.servico.obra.c_obra == CNO_FICTICIO
+
+
+def test_script_gera_dps_de_obra_valida(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert gerar_dps.main(["--c-trib-nac", "070202", "--obra-cno", CNO_FICTICIO]) == 0
+    out = capsys.readouterr().out
+    assert f"<cObra>{CNO_FICTICIO}</cObra>" in out
+    assert "[OK] Válida" in out
+
+
+def test_codigo_de_obra_sem_cno_sai_com_erro_claro(capsys):
+    with pytest.raises(SystemExit) as saida:
+        gerar_dps.main(["--c-trib-nac", "070202"])
+    assert saida.value.code == 2
+    assert "E0370" in capsys.readouterr().err
+
+
+def test_cno_com_codigo_que_nao_e_de_obra_sai_com_erro_claro(capsys):
+    with pytest.raises(SystemExit) as saida:
+        gerar_dps.main(["--obra-cno", CNO_FICTICIO])
+    assert saida.value.code == 2
+    assert "E0372" in capsys.readouterr().err

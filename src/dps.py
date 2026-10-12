@@ -55,6 +55,18 @@ _CST = frozenset(
 _TP_RET_PIS_COFINS = range(10)
 _TP_RET_PIS_COFINS_SEM_CSLL = (0, 2)
 
+# Grupo de obra (T-020, DEC-047). Anexo I v1.01, E0370: estes subitens exigem o grupo;
+# E0372: os demais o proíbem, exceto o 99.01.01.
+CODIGOS_DE_OBRA = frozenset([
+    "070201", "070202", "070401", "070501", "070502", "070601", "070602",
+    "070701", "070801", "071701", "071901", "141403", "141404",
+])  # fmt: skip
+_OBRA_PERMITIDA = "990101"
+_CEP = re.compile(r"[0-9]{8}")  # TSCEP
+_C_CIB = 8  # TSCodCIB: 7 caracteres + DV (E0373, conferido só pelo servidor)
+_C_OBRA_MAX = 30  # TSCodObra
+_INSC_IMOB_FISC_MAX = 30  # TSInscImobFisc
+
 
 def fone_valido(fone: object) -> bool:
     return isinstance(fone, str) and _FONE.fullmatch(fone) is not None
@@ -134,6 +146,71 @@ class Tomador:
             _so_digitos(self.cpf, 11, "tomador.cpf")
 
 
+def _texto(valor: object, maximo: int, campo: str) -> None:
+    """TSString: de 1 a `maximo` caracteres, sem espaço no início nem no fim."""
+    if not isinstance(valor, str) or not valor.strip() or valor != valor.strip():
+        raise ValueError(f"{campo} deve ser preenchido, sem espaço no início nem no fim")
+    if len(valor) > maximo:
+        raise ValueError(f"{campo} deve ter no máximo {maximo} caracteres")
+
+
+def _identificador(valor: object, maximo: int, campo: str) -> None:
+    """Código livre (xs:string) de 1 a `maximo` caracteres, que não seja só espaços."""
+    if not isinstance(valor, str) or not valor.strip() or len(valor) > maximo:
+        raise ValueError(f"{campo} deve ter de 1 a {maximo} caracteres")
+
+
+@dataclass(frozen=True)
+class EnderecoObra:
+    """Endereço nacional da obra (TCEnderObraEvento). O servidor confere se o CEP é do
+    município do local da prestação (E0380); o modelo não tem tabela de CEPs."""
+
+    cep: str | None
+    logradouro: str
+    numero: str
+    bairro: str
+    complemento: str | None = None
+
+    def __post_init__(self):
+        if self.cep is None:
+            raise ValueError(
+                "endereço da obra no exterior (endExt, sem CEP) ainda não suportado (T-022)"
+            )
+        if not isinstance(self.cep, str) or not _CEP.fullmatch(self.cep):
+            raise ValueError("obra.endereco.cep deve ter 8 dígitos numéricos")
+        _texto(self.logradouro, 255, "obra.endereco.logradouro")
+        _texto(self.numero, 60, "obra.endereco.numero")
+        _texto(self.bairro, 60, "obra.endereco.bairro")
+        if self.complemento is not None:
+            _texto(self.complemento, 156, "obra.endereco.complemento")
+
+
+@dataclass(frozen=True)
+class Obra:
+    """Grupo serv/obra (TCInfoObra): exatamente uma identificação, entre o número da obra
+    (CNO ou CEI), o CIB e o endereço."""
+
+    c_obra: str | None = None
+    c_cib: str | None = None
+    endereco: EnderecoObra | None = None
+    insc_imob_fisc: str | None = None
+
+    def __post_init__(self):
+        informados = [c for c in (self.c_obra, self.c_cib, self.endereco) if c is not None]
+        if len(informados) != 1:
+            raise ValueError(
+                "obra: informe exatamente uma identificação: c_obra (CNO ou CEI), c_cib ou endereco"
+            )
+        if self.c_obra is not None:
+            _identificador(self.c_obra, _C_OBRA_MAX, "obra.c_obra")
+        if self.c_cib is not None and (
+            not isinstance(self.c_cib, str) or len(self.c_cib) != _C_CIB
+        ):
+            raise ValueError(f"obra.c_cib deve ter {_C_CIB} caracteres")
+        if self.insc_imob_fisc is not None:
+            _identificador(self.insc_imob_fisc, _INSC_IMOB_FISC_MAX, "obra.insc_imob_fisc")
+
+
 @dataclass(frozen=True)
 class Servico:
     c_loc_prestacao: str  # código IBGE do município (7 dígitos)
@@ -142,6 +219,7 @@ class Servico:
     # Código de tributação do município (3 dígitos). Precisa existir no município de
     # incidência (E0314), o que só o servidor confere.
     c_trib_mun: str | None = None
+    obra: Obra | None = None  # obrigatório para CODIGOS_DE_OBRA (T-020)
 
     def __post_init__(self):
         _so_digitos(self.c_loc_prestacao, 7, "servico.c_loc_prestacao")
@@ -150,6 +228,20 @@ class Servico:
             raise ValueError("servico.c_trib_mun deve ter 3 dígitos numéricos")
         if not self.descricao.strip():
             raise ValueError("servico.descricao é obrigatória")
+        if self.c_trib_nac in CODIGOS_DE_OBRA and self.obra is None:
+            raise ValueError(
+                f"o código de tributação nacional {self.c_trib_nac} é de obra: o grupo de obra "
+                "é obrigatório (servico.obra; E0370)"
+            )
+        if (
+            self.obra is not None
+            and self.c_trib_nac not in CODIGOS_DE_OBRA
+            and self.c_trib_nac != _OBRA_PERMITIDA
+        ):
+            raise ValueError(
+                f"o código de tributação nacional {self.c_trib_nac} não é de obra: o grupo de "
+                "obra não é permitido (E0372)"
+            )
 
 
 @dataclass(frozen=True)
@@ -309,6 +401,8 @@ def para_xml(dps: Dps) -> bytes:
     if dps.servico.c_trib_mun is not None:
         _sub(cserv, "cTribMun", dps.servico.c_trib_mun)
     _sub(cserv, "xDescServ", dps.servico.descricao)
+    if dps.servico.obra is not None:
+        _obra_xml(serv, dps.servico.obra)
 
     val = _sub(inf, "valores")
     vsp = _sub(val, "vServPrest")
@@ -329,6 +423,24 @@ def para_xml(dps: Dps) -> bytes:
     _sub(tot, "pTotTribSN", _dinheiro(dps.valores.p_tot_trib_sn))
 
     return etree.tostring(raiz, xml_declaration=True, encoding="UTF-8")
+
+
+def _obra_xml(serv, obra: Obra) -> None:
+    el = _sub(serv, "obra")
+    if obra.insc_imob_fisc is not None:
+        _sub(el, "inscImobFisc", obra.insc_imob_fisc)
+    if obra.c_obra is not None:
+        _sub(el, "cObra", obra.c_obra)
+    elif obra.c_cib is not None:
+        _sub(el, "cCIB", obra.c_cib)
+    else:
+        end = _sub(el, "end")
+        _sub(end, "CEP", obra.endereco.cep)
+        _sub(end, "xLgr", obra.endereco.logradouro)
+        _sub(end, "nro", obra.endereco.numero)
+        if obra.endereco.complemento is not None:
+            _sub(end, "xCpl", obra.endereco.complemento)
+        _sub(end, "xBairro", obra.endereco.bairro)
 
 
 # -------------------------------------------------------------- validação

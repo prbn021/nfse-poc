@@ -2,7 +2,8 @@
 
 Script manual: usa a rede e o certificado real do emitente. Monta a DPS de exemplo de
 gerar_dps.py com o número pedido, o código de tributação nacional do serviço do emitente
-(obrigatório, E0312) e, se dado, o municipal (`cTribMun`, E0314; sem ele, a DPS vai sem);
+(obrigatório, E0312), se dado, o municipal (`cTribMun`, E0314; sem ele, a DPS vai sem) e,
+se dado, o CNO da obra (grupo de obra, T-020);
 valida contra o XSD, assina, confere a assinatura e envia uma vez (src/emissao.py).
 Salva em out/ a DPS enviada e a NFS-e devolvida. Só produção restrita (INV-02).
 Não mostra senha, chave nem conteúdo do certificado (INV-05).
@@ -95,6 +96,11 @@ def main(
         "parametriza o serviço (veja consultar_parametros.py --desdobramento); padrão: nenhum",
     )
     parser.add_argument(
+        "--obra-cno",
+        help="número da obra no CNO (ou CEI): põe o grupo de obra, exigido pelos códigos de "
+        "obra (E0370) e proibido nos demais (E0372); padrão: nenhum",
+    )
+    parser.add_argument(
         "--p-tot-trib-sn",
         default=str(P_TOT_TRIB_SN_FICTICIO),
         help="%% aproximado dos tributos do Simples na competência (padrão: %(default)s, fictício)",
@@ -105,16 +111,18 @@ def main(
         config = config or carregar_config()
         emitente = carregar_emitente(args.emitente, pasta)
         cert = carregar_certificado(emitente.cert_path, emitente.cert_senha)
-        exemplo = dps_exemplo(config.tp_amb, emitente, _decimal(args.p_tot_trib_sn))
+        exemplo = dps_exemplo(
+            config.tp_amb,
+            emitente,
+            _decimal(args.p_tot_trib_sn),
+            c_trib_nac=args.c_trib_nac,
+            obra_cno=args.obra_cno,
+        )
         dps = dataclasses.replace(
             exemplo,
             serie=args.serie,
             n_dps=args.n_dps,
-            servico=dataclasses.replace(
-                exemplo.servico,
-                c_trib_mun=args.c_trib_mun,
-                c_trib_nac=args.c_trib_nac,
-            ),
+            servico=dataclasses.replace(exemplo.servico, c_trib_mun=args.c_trib_mun),
         )
         cliente = ClienteNfse(config, cert, transporte=transporte)
     except ValueError as erro:

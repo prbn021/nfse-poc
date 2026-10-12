@@ -76,6 +76,14 @@ A DPS é de emitente ME/EPP do Simples Nacional, o único caso que o modelo emit
 .\.venv\Scripts\python.exe scripts\gerar_dps.py --p-tot-trib-sn 4.50
 ```
 
+Serviços de construção civil e congêneres (07.02.01, 07.02.02, 07.04.01, 07.05.01, 07.05.02, 07.06.01, 07.06.02, 07.07.01, 07.08.01, 07.17.01, 07.19.01, 14.14.03 e 14.14.04) exigem o grupo de obra na DPS (E0370), e os demais serviços não o aceitam (E0372), exceto o 99.01.01. Para gerar uma DPS de obra, passe o código em `--c-trib-nac` e o número da obra no CNO (ou CEI) em `--obra-cno`; os valores abaixo são fictícios:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\gerar_dps.py --c-trib-nac 070202 --obra-cno 900000000001
+```
+
+O modelo também aceita identificar a obra pelo CIB ou pelo endereço, mas os scripts só têm `--obra-cno`. Ele não confere o dígito verificador do CIB nem se o CEP da obra é do município da prestação; essas regras ficam com a SEFIN. Obra em outro município ou no exterior ainda não é tratada (T-021, T-022).
+
 A cópia local dos XSDs (`schemas\1.01-local`, fora do git) é refeita a cada execução. Para gerá-la sem gerar a DPS: `.\.venv\Scripts\python.exe scripts\preparar_xsd.py`.
 
 ## Emitentes
@@ -144,7 +152,7 @@ Para emitir a DPS de exemplo em produção restrita (sem valor fiscal), com o ce
 .\.venv\Scripts\python.exe scripts\emitir.py --emitente minha-empresa --n-dps 1 --c-trib-nac 123456
 ```
 
-Use um `--n-dps` novo a cada envio (a SEFIN recusa série e número repetidos, E0014). O `--c-trib-nac` é obrigatório: é o código de tributação nacional do serviço do emitente (6 dígitos; o `123456` acima é só ilustração), que precisa ser administrado pelo município de incidência (E0312). Se o município parametriza o serviço com desdobramento próprio, passe-o em `--c-trib-mun` (3 dígitos); sem ele, a DPS vai sem `cTribMun`. O script monta a DPS de exemplo, assina, confere e valida; grava `out\<Id>-enviada.xml`; consulta se já existe nota para aquele Id e, se não existir, envia uma vez só. A NFS-e devolvida vai para `out\NFSe<chave>.xml` e é conferida (XSD, Ids, ambiente e assinatura do sistema). Se a conexão cair no envio, ele não reenvia: consulta a DPS e baixa a nota, se ela tiver sido gerada. Mostra a chave de acesso, os alertas e os códigos de erro da SEFIN.
+Use um `--n-dps` novo a cada envio (a SEFIN recusa série e número repetidos, E0014). O `--c-trib-nac` é obrigatório: é o código de tributação nacional do serviço do emitente (6 dígitos; o `123456` acima é só ilustração), que precisa ser administrado pelo município de incidência (E0312). Se o município parametriza o serviço com desdobramento próprio, passe-o em `--c-trib-mun` (3 dígitos); sem ele, a DPS vai sem `cTribMun`. Para um serviço de obra, passe também `--obra-cno` (veja "Rodar"). O script monta a DPS de exemplo, assina, confere e valida; grava `out\<Id>-enviada.xml`; consulta se já existe nota para aquele Id e, se não existir, envia uma vez só. A NFS-e devolvida vai para `out\NFSe<chave>.xml` e é conferida (XSD, Ids, ambiente e assinatura do sistema). Se a conexão cair no envio, ele não reenvia: consulta a DPS e baixa a nota, se ela tiver sido gerada. Mostra a chave de acesso, os alertas e os códigos de erro da SEFIN.
 
 | Código de saída | Significado |
 | --------------- | ----------- |
