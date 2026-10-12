@@ -2,8 +2,9 @@
 
 Script manual: usa a rede e o certificado real do emitente, só com consultas (GET) na API de
 parâmetros municipais do ADN de produção restrita (INV-02). Mostra o convênio do município e o
-histórico de alíquotas do `cTribNac`, com o desdobramento `000` (9 dígitos) e sem ele (6),
-porque a especificação não diz qual formato a API espera. Serve para entender o E0312.
+histórico de alíquotas do `cTribNac` com o desdobramento `000`, em 9 dígitos e no formato
+pontuado `NN.NN.NN.NNN`, porque a especificação não diz qual formato a API espera.
+Serve para entender o E0312.
 As respostas brutas vão para out/. Não mostra senha, chave nem conteúdo do certificado.
 """
 
@@ -71,7 +72,10 @@ def main(
         return 1
 
     saida.mkdir(parents=True, exist_ok=True)
-    codigos = [args.c_trib_nac + SEM_DESDOBRAMENTO, args.c_trib_nac]
+    # A API real recusou 6 dígitos e 9 dígitos com zero à esquerda (DEC-041): tenta também o
+    # formato pontuado do guia do painel municipal.
+    c = args.c_trib_nac
+    codigos = [c + SEM_DESDOBRAMENTO, f"{c[:2]}.{c[2:4]}.{c[4:6]}.{SEM_DESDOBRAMENTO}"]
     with cliente:
         print(f"ADN: {cliente.base_url}")
         arquivo = saida / f"adn-{municipio}-convenio.json"

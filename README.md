@@ -122,7 +122,7 @@ Para consultar no ADN se um município está parametrizado e administra um códi
 .\.venv\Scripts\python.exe scripts\consultar_parametros.py --emitente minha-empresa --c-trib-nac 123456
 ```
 
-Só consultas, em produção restrita. Mostra o convênio do município (o do emitente, ou o de `--municipio`) e o histórico de alíquotas do código com o desdobramento `000` e sem ele, e grava as respostas em `out\adn-<município>-…json`. Os campos aparecem como a API os devolve; a especificação não descreve os valores 0, 1 e -1.
+Só consultas, em produção restrita. Mostra o convênio do município (o do emitente, ou o de `--municipio`) e o histórico de alíquotas do código com o desdobramento `000`, em 9 dígitos e no formato pontuado (`04.12.01.000`), e grava as respostas em `out\adn-<município>-…json`. Os campos aparecem como a API os devolve; a especificação não descreve os valores 0, 1 e -1.
 
 Para assinar a DPS de exemplo com o certificado de um emitente e empacotá-la em GZip+Base64:
 

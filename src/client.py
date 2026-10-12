@@ -33,7 +33,8 @@ TEMPO_LIMITE = 30.0  # segundos
 _ID_DPS = re.compile(r"DPS\d{42}")
 _CHAVE = re.compile(r"\d{50}")
 _MUNICIPIO = re.compile(r"\d{7}")
-_CODIGO_SERVICO = re.compile(r"\d{6}|\d{9}")
+# 9 dígitos (cTribNac + desdobramento) ou o mesmo pontuado, como no guia do painel municipal.
+_CODIGO_SERVICO = re.compile(r"\d{9}|\d{2}\.\d{2}\.\d{2}\.\d{3}")
 _PARAMETRIZACAO = "parametrizacao"  # caminho da API de parâmetros municipais no ADN
 _CAMINHO = re.compile(r"[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*")
 
@@ -242,12 +243,13 @@ class ClienteNfse:
     def historico_aliquotas(self, municipio: str, codigo_servico: str) -> ConsultaParametros:
         """`GET /parametrizacao/{municipio}/{codigo}/historicoaliquotas` no ADN (T-026).
 
-        A especificação não diz o formato de `codigoServico`: aceita o `cTribNac` (6 dígitos)
-        ou ele com o desdobramento municipal (9 dígitos), e quem chama escolhe.
+        A especificação não diz o formato de `codigoServico`. A API real recusou 6 dígitos e
+        recusou 9 dígitos com zero à esquerda (DEC-041): aceita 9 dígitos ou o formato
+        pontuado `NN.NN.NN.NNN`, e quem chama escolhe.
         """
         self._conferir_parametros(municipio)
         if not _CODIGO_SERVICO.fullmatch(codigo_servico):
-            raise ValueError("código de serviço fora do formato: 6 ou 9 dígitos")
+            raise ValueError("código de serviço fora do formato: 9 dígitos ou NN.NN.NN.NNN")
         return self._parametros(f"{municipio}/{codigo_servico}/historicoaliquotas")
 
     def _conferir_parametros(self, municipio: str) -> None:

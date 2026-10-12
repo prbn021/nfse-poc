@@ -240,15 +240,27 @@ def test_historico_de_aliquotas(cert):
     assert consulta.mensagem is None
 
 
+def test_historico_de_aliquotas_com_codigo_pontuado(cert):
+    # Formato do guia do painel municipal (07.02.01.001); a API recusou 9 dígitos com zero à
+    # esquerda dizendo que o código "deve ser composto por nove dígitos" (DEC-041).
+    pedidos = []
+    with cliente_adn(cert, json_resposta(404, {"mensagem": "x"}), pedidos) as cliente:
+        cliente.historico_aliquotas("3304557", "04.12.01.000")
+    assert str(pedidos[0].url) == f"{ADN}/parametrizacao/3304557/04.12.01.000/historicoaliquotas"
+
+
 @pytest.mark.parametrize(
     ("municipio", "codigo"),
     [
-        ("330455", "041201"),
-        ("33045570", "041201"),
-        ("abc4557", "041201"),
+        ("330455", "041201000"),
+        ("33045570", "041201000"),
+        ("abc4557", "041201000"),
+        ("3304557", "041201"),
         ("3304557", "04120"),
         ("3304557", "0412010"),
         ("3304557", "04/201"),
+        ("3304557", "04.12.01"),
+        ("3304557", "4.12.1.0"),
     ],
 )
 def test_consultas_recusam_codigos_fora_do_formato(cert, municipio, codigo):

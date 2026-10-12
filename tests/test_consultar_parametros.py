@@ -80,17 +80,18 @@ def rodar(emitentes, tmp_path, transporte, *args, cfg=None):
     )
 
 
-def test_consulta_convenio_e_historico_com_9_e_6_digitos(emitentes, tmp_path, capsys):
+def test_consulta_convenio_e_historico_com_9_digitos_e_pontuado(emitentes, tmp_path, capsys):
     pedidos = []
     respostas = {
         "3304557/convenio": httpx.Response(200, json=CONVENIO),
         "3304557/990101000/historicoaliquotas": httpx.Response(200, json=ALIQUOTAS),
     }
     assert rodar(emitentes, tmp_path, adn(pedidos, respostas=respostas)) == 0
+    # 6 dígitos foi recusado pela API real; vão 9 dígitos e o formato pontuado (DEC-041).
     assert pedidos == [
         "/parametrizacao/3304557/convenio",
         "/parametrizacao/3304557/990101000/historicoaliquotas",
-        "/parametrizacao/3304557/990101/historicoaliquotas",
+        "/parametrizacao/3304557/99.01.01.000/historicoaliquotas",
     ]
     out, err = capsys.readouterr()
     assert err == ""
@@ -99,7 +100,7 @@ def test_consulta_convenio_e_historico_com_9_e_6_digitos(emitentes, tmp_path, ca
     assert "aderenteEmissorNacional=1" in out
     assert "Histórico de alíquotas de 990101000: HTTP 200" in out
     assert "990101000: Incidencia=1, Aliq=5.0, DtIni=2025-01-01T00:00:00, DtFim=None" in out
-    assert "Histórico de alíquotas de 990101: HTTP 404 (não encontrado (simulado))" in out
+    assert "Histórico de alíquotas de 99.01.01.000: HTTP 404 (não encontrado (simulado))" in out
     assert SENHA not in out
     assert CNPJ not in out
 
@@ -107,7 +108,7 @@ def test_consulta_convenio_e_historico_com_9_e_6_digitos(emitentes, tmp_path, ca
     assert json.loads((saida / "adn-3304557-convenio.json").read_text()) == CONVENIO
     historico = saida / "adn-3304557-990101000-historicoaliquotas.json"
     assert json.loads(historico.read_text()) == ALIQUOTAS
-    assert (saida / "adn-3304557-990101-historicoaliquotas.json").exists()
+    assert (saida / "adn-3304557-99.01.01.000-historicoaliquotas.json").exists()
 
 
 def test_municipio_pode_ser_outro_que_o_do_emitente(emitentes, tmp_path, capsys):
