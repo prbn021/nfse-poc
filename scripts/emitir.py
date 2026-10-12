@@ -2,7 +2,7 @@
 
 Script manual: usa a rede e o certificado real do emitente. Monta a DPS de exemplo de
 gerar_dps.py sem `cTribMun` (o fictício não existe no município, E0314), com o número
-pedido e, se dado, o código de tributação nacional do serviço do emitente (E0312);
+pedido e o código de tributação nacional do serviço do emitente (obrigatório, E0312);
 valida contra o XSD, assina, confere a assinatura e envia uma vez (src/emissao.py).
 Salva em out/ a DPS enviada e a NFS-e devolvida. Só produção restrita (INV-02).
 Não mostra senha, chave nem conteúdo do certificado (INV-05).
@@ -74,8 +74,9 @@ def main(
     parser.add_argument("--serie", type=int, default=1, help="série da DPS (padrão: %(default)s)")
     parser.add_argument(
         "--c-trib-nac",
-        help="código de tributação nacional do serviço, 6 dígitos, administrado pelo município "
-        "de incidência (E0312); padrão: o do exemplo, fictício",
+        required=True,
+        help="código de tributação nacional do serviço do emitente, 6 dígitos, administrado "
+        "pelo município de incidência (E0312)",
     )
     parser.add_argument(
         "--p-tot-trib-sn",
@@ -96,7 +97,7 @@ def main(
             servico=dataclasses.replace(
                 exemplo.servico,
                 c_trib_mun=None,
-                c_trib_nac=args.c_trib_nac or exemplo.servico.c_trib_nac,
+                c_trib_nac=args.c_trib_nac,
             ),
         )
         cliente = ClienteNfse(config, cert, transporte=transporte)

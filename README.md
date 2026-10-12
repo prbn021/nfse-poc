@@ -121,10 +121,10 @@ O script monta a mesma DPS de exemplo de `gerar_dps.py`, com o prestador do emit
 Para emitir a DPS de exemplo em produção restrita (sem valor fiscal), com o certificado de um emitente:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\emitir.py --emitente minha-empresa --n-dps 1
+.\.venv\Scripts\python.exe scripts\emitir.py --emitente minha-empresa --n-dps 1 --c-trib-nac 123456
 ```
 
-Use um `--n-dps` novo a cada envio (a SEFIN recusa série e número repetidos, E0014). Passe em `--c-trib-nac` o código de tributação nacional do serviço do emitente (6 dígitos): o `010101` do exemplo não é aceito em todo município (E0312). O script monta a DPS de exemplo sem `cTribMun`, assina, confere e valida; grava `out\<Id>-enviada.xml`; consulta se já existe nota para aquele Id e, se não existir, envia uma vez só. A NFS-e devolvida vai para `out\NFSe<chave>.xml` e é conferida (XSD, Ids, ambiente e assinatura do sistema). Se a conexão cair no envio, ele não reenvia: consulta a DPS e baixa a nota, se ela tiver sido gerada. Mostra a chave de acesso, os alertas e os códigos de erro da SEFIN.
+Use um `--n-dps` novo a cada envio (a SEFIN recusa série e número repetidos, E0014). O `--c-trib-nac` é obrigatório: é o código de tributação nacional do serviço do emitente (6 dígitos; o `123456` acima é só ilustração), que precisa ser administrado pelo município de incidência (E0312). O script monta a DPS de exemplo sem `cTribMun`, assina, confere e valida; grava `out\<Id>-enviada.xml`; consulta se já existe nota para aquele Id e, se não existir, envia uma vez só. A NFS-e devolvida vai para `out\NFSe<chave>.xml` e é conferida (XSD, Ids, ambiente e assinatura do sistema). Se a conexão cair no envio, ele não reenvia: consulta a DPS e baixa a nota, se ela tiver sido gerada. Mostra a chave de acesso, os alertas e os códigos de erro da SEFIN.
 
 | Código de saída | Significado |
 | --------------- | ----------- |

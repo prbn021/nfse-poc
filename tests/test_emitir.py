@@ -95,8 +95,9 @@ class Servidor:
         return httpx.Response(404)
 
 
-def rodar(emitentes, tmp_path, servidor, *args, ambiente="homologacao"):
-    argv = ["--emitente", "acme", "--n-dps", "7", *args]
+def rodar(emitentes, tmp_path, servidor, *args, ambiente="homologacao", c_trib_nac="990101"):
+    # 990101: código fictício, só para os testes.
+    argv = ["--emitente", "acme", "--n-dps", "7", "--c-trib-nac", c_trib_nac, *args]
     return emitir.main(
         argv,
         pasta=emitentes,
@@ -140,22 +141,31 @@ def test_dps_enviada_tem_o_numero_pedido_sem_ctribmun_e_assinada(emitentes, tmp_
 def test_codigo_de_tributacao_nacional_vem_do_argumento(emitentes, tmp_path):
     # Fictício para o teste; na emissão real, o código do serviço do emitente (DEC-038).
     servidor = Servidor()
-    assert rodar(emitentes, tmp_path, servidor, "--c-trib-nac", "990101") == 0
+    assert rodar(emitentes, tmp_path, servidor, c_trib_nac="990102") == 0
     inf = etree.fromstring(servidor.dps_recebida).find("n:infDPS", N)
-    assert inf.findtext("n:serv/n:cServ/n:cTribNac", namespaces=N) == "990101"
+    assert inf.findtext("n:serv/n:cServ/n:cTribNac", namespaces=N) == "990102"
 
 
-def test_sem_o_argumento_usa_o_codigo_do_exemplo(emitentes, tmp_path):
+def test_sem_o_codigo_de_tributacao_nao_envia(emitentes, tmp_path, capsys):
+    # O código do exemplo foi recusado pela SEFIN (E0312): sem o argumento, nada é enviado.
     servidor = Servidor()
-    assert rodar(emitentes, tmp_path, servidor) == 0
-    inf = etree.fromstring(servidor.dps_recebida).find("n:infDPS", N)
-    assert inf.findtext("n:serv/n:cServ/n:cTribNac", namespaces=N) == "010101"
+    with pytest.raises(SystemExit) as saida:
+        emitir.main(
+            ["--emitente", "acme", "--n-dps", "7"],
+            pasta=emitentes,
+            config=config(),
+            transporte=httpx.MockTransport(servidor),
+            saida=tmp_path / "out",
+        )
+    assert saida.value.code == 2
+    assert servidor.pedidos == []
+    assert "--c-trib-nac" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("codigo", ["12", "abcdef", "1234567"])
 def test_codigo_de_tributacao_invalido_nao_envia(emitentes, tmp_path, capsys, codigo):
     servidor = Servidor()
-    assert rodar(emitentes, tmp_path, servidor, "--c-trib-nac", codigo) == 1
+    assert rodar(emitentes, tmp_path, servidor, c_trib_nac=codigo) == 1
     assert servidor.pedidos == []
     assert "c_trib_nac" in capsys.readouterr().err
 
@@ -220,7 +230,7 @@ def test_producao_e_recusada_antes_de_qualquer_chamada(emitentes, tmp_path, caps
 
 def test_numero_invalido_nao_envia(emitentes, tmp_path, capsys):
     servidor = Servidor()
-    argv = ["--emitente", "acme", "--n-dps", "0"]
+    argv = ["--emitente", "acme", "--n-dps", "0", "--c-trib-nac", "990101"]
     codigo = emitir.main(
         argv,
         pasta=emitentes,
@@ -233,8 +243,16 @@ def test_numero_invalido_nao_envia(emitentes, tmp_path, capsys):
     assert "n_dps" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("argv", [[], ["--emitente", "acme"], ["--n-dps", "1"]])
-def test_emitente_e_numero_sao_obrigatorios(argv, capsys):
+@pytest.mark.parametrize(
+    "argv",
+    [
+        [],
+        ["--emitente", "acme", "--c-trib-nac", "990101"],
+        ["--n-dps", "1", "--c-trib-nac", "990101"],
+        ["--emitente", "acme", "--n-dps", "1"],
+    ],
+)
+def test_emitente_numero_e_codigo_sao_obrigatorios(argv, capsys):
     with pytest.raises(SystemExit) as saida:
         emitir.main(argv)
     assert saida.value.code == 2
