@@ -39,6 +39,8 @@ def test_b1_dps_importa_biblioteca_de_rede():
         ("from src import certificado\n", "src.certificado"),
         ("from . import certificado\n", "src.certificado"),
         ("from .certificado import carregar\n", "src.certificado"),
+        ("from src.assinatura import assinar_dps\n", "src.assinatura"),
+        ("from . import assinatura\n", "src.assinatura"),
     ],
 )
 def test_b1_dps_importa_modulo_de_certificado(codigo, alvo):
