@@ -75,6 +75,20 @@ def test_nfse_alterada_depois_de_assinada(nfse, xsd):
     assert problemas == ["assinatura da NFS-e não confere com o certificado que ela traz"]
 
 
+def test_consulta_por_chave_confere_sem_o_id_da_dps(nfse, xsd):
+    # T-028: numa consulta por chave não se sabe o Id da DPS; o resto é conferido.
+    assert conferir_nfse(nfse, chave=CHAVE, id_dps=None, xsd=xsd) == []
+    outra = "1" * 50
+    problemas = conferir_nfse(nfse, chave=outra, id_dps=None, xsd=xsd)
+    assert problemas == ["Id da NFS-e não corresponde à chave de acesso devolvida"]
+
+
+def test_consulta_por_chave_ainda_aponta_producao(dps_assinada, xsd):
+    nfse = gerar_nfse(dps_assinada.replace(b"<tpAmb>2</tpAmb>", b"<tpAmb>1</tpAmb>"))
+    problemas = conferir_nfse(nfse, chave=CHAVE, id_dps=None, xsd=xsd)
+    assert "tpAmb da NFS-e não é 2 (produção restrita)" in problemas
+
+
 @pytest.mark.parametrize("xml", [b"", b"nao e xml", b"<outra/>"])
 def test_conteudo_que_nao_e_nfse(xml, xsd):
     problemas = conferir_nfse(xml, chave=CHAVE, id_dps=ID_DPS, xsd=xsd)

@@ -33,6 +33,7 @@ TEMPO_LIMITE = 30.0  # segundos
 _ID_DPS = re.compile(r"DPS\d{42}")
 _CHAVE = re.compile(r"\d{50}")
 _MUNICIPIO = re.compile(r"\d{7}")
+_TIPO_EVENTO = re.compile(r"[0-9]{6}")  # código do evento, Anexo II (ex.: 101101)
 # 9 dígitos (cTribNac + desdobramento) ou o mesmo pontuado, como no guia do painel municipal.
 _CODIGO_SERVICO = re.compile(r"\d{9}|\d{2}\.\d{2}\.\d{2}\.\d{3}")
 _PARAMETRIZACAO = "parametrizacao"  # caminho da API de parâmetros municipais no ADN
@@ -236,6 +237,27 @@ class ClienteNfse:
                 resposta.status, f"HTTP {resposta.status} não previsto na consulta"
             )
 
+    def consultar_evento(self, chave: str, tipo: str, seq: int) -> bytes | None:
+        """`GET /nfse/{chave}/eventos/{tipo}/{seq}`: o XML do evento, já decodificado, ou None
+        quando a NFS-e não tem esse evento (404) (T-028)."""
+        if not _CHAVE.fullmatch(chave):
+            raise ValueError("chave de acesso fora do formato: 50 dígitos")
+        if not isinstance(tipo, str) or not _TIPO_EVENTO.fullmatch(tipo):
+            raise ValueError("tipo do evento fora do formato: 6 dígitos (ex.: 101101)")
+        if isinstance(seq, bool) or not isinstance(seq, int) or not 1 <= seq <= 999:
+            raise ValueError("número sequencial do evento fora do formato: de 1 a 999")
+        resposta = self._pedir("GET", f"nfse/{chave}/eventos/{tipo}/{seq}")
+        with _anexar_corpo(resposta):
+            if resposta.status == 200:
+                return _evento_xml(resposta.status, _objeto_json(resposta))
+            if resposta.status == 404:
+                return None
+            if resposta.status in (401, 422):
+                raise _rejeicao(resposta)
+            raise RespostaInesperada(
+                resposta.status, f"HTTP {resposta.status} não previsto na consulta de eventos"
+            )
+
     def convenio(self, municipio: str) -> ConsultaParametros:
         """`GET /parametrizacao/{municipio}/convenio` no ADN (T-026)."""
         self._conferir_parametros(municipio)
@@ -332,6 +354,17 @@ def _nfse_xml(status: int, corpo: dict) -> bytes:
         return decodificar(texto)
     except ValueError as erro:
         motivo = f"nfseXmlGZipB64 inválido: {erro}"
+    raise RespostaInesperada(status, motivo)
+
+
+def _evento_xml(status: int, corpo: dict) -> bytes:
+    texto = corpo.get("eventoxmlgzipb64")
+    if not isinstance(texto, str):
+        raise RespostaInesperada(status, "eventoXmlGZipB64 ausente")
+    try:
+        return decodificar(texto)
+    except ValueError as erro:
+        motivo = f"eventoXmlGZipB64 inválido: {erro}"
     raise RespostaInesperada(status, motivo)
 
 

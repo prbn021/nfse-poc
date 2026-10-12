@@ -671,6 +671,98 @@ def test_obter_nfse_recusa_chave_fora_do_formato(cert, chave):
     assert pedidos == []
 
 
+# --- consulta de eventos (T-028, DEC-051) -----------------------------------------------
+
+EVENTO_XML = "<evento>fictício</evento>".encode()
+
+
+def evento_200(**over) -> httpx.Response:
+    corpo = {
+        "tipoAmbiente": 2,
+        "versaoAplicativo": "x",
+        "dataHoraProcessamento": QUANDO,
+        "eventoXmlGZipB64": codificar(EVENTO_XML),
+    }
+    corpo.update(over)
+    return json_resposta(200, corpo)
+
+
+def erro_consulta(status: int, codigo: str = "E9999") -> httpx.Response:
+    corpo = {
+        "tipoAmbiente": 2,
+        "versaoAplicativo": "x",
+        "dataHoraProcessamento": QUANDO,
+        "erro": {"codigo": codigo, "descricao": "fictício", "complemento": None},
+    }
+    return json_resposta(status, corpo)
+
+
+def test_consultar_evento_devolve_o_xml(cert):
+    pedidos = []
+    with ClienteNfse(config(), cert, transporte=transporte(evento_200(), pedidos)) as cliente:
+        assert cliente.consultar_evento(CHAVE, "101101", 1) == EVENTO_XML
+    assert [(p.method, str(p.url)) for p in pedidos] == [
+        ("GET", f"{BASE}/nfse/{CHAVE}/eventos/101101/1")
+    ]
+
+
+def test_consultar_evento_sem_evento_devolve_none(cert):
+    with ClienteNfse(config(), cert, transporte=transporte(erro_consulta(404))) as cliente:
+        assert cliente.consultar_evento(CHAVE, "101101", 1) is None
+
+
+@pytest.mark.parametrize("status", [401, 422])
+def test_consultar_evento_rejeitado(cert, status):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(erro_consulta(status))) as cliente,
+        pytest.raises(RejeicaoApi) as erro,
+    ):
+        cliente.consultar_evento(CHAVE, "101101", 1)
+    assert erro.value.status == status
+    assert erro.value.mensagens == (MensagemApi("E9999", "fictício", None),)
+    assert erro.value.corpo
+
+
+@pytest.mark.parametrize(
+    ("resposta", "motivo"),
+    [
+        (httpx.Response(200, content=b"<html/>"), "corpo não é JSON"),
+        (evento_200(eventoXmlGZipB64="nao-e-base64!"), "eventoXmlGZipB64 inválido"),
+        (evento_200(eventoXmlGZipB64=None), "eventoXmlGZipB64 ausente"),
+        (httpx.Response(500, json={}), "HTTP 500 não previsto"),
+    ],
+)
+def test_consultar_evento_resposta_inesperada(cert, resposta, motivo):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RespostaInesperada, match=motivo),
+    ):
+        cliente.consultar_evento(CHAVE, "101101", 1)
+
+
+@pytest.mark.parametrize(
+    ("chave", "tipo", "seq", "campo"),
+    [
+        ("123", "101101", 1, "chave de acesso"),
+        (CHAVE, "10110", 1, "tipo do evento"),
+        (CHAVE, "1011011", 1, "tipo do evento"),
+        (CHAVE, "abcdef", 1, "tipo do evento"),
+        (CHAVE, "101101", 0, "número sequencial"),
+        (CHAVE, "101101", 1000, "número sequencial"),
+        (CHAVE, "101101", "1", "número sequencial"),
+        (CHAVE, "101101", True, "número sequencial"),
+    ],
+)
+def test_consultar_evento_recusa_parametros_fora_do_formato(cert, chave, tipo, seq, campo):
+    pedidos = []
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(evento_200(), pedidos)) as c,
+        pytest.raises(ValueError, match=campo),
+    ):
+        c.consultar_evento(chave, tipo, seq)
+    assert pedidos == []
+
+
 # --- INV-05 -----------------------------------------------------------------------------
 
 
