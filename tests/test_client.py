@@ -2,6 +2,7 @@
 `httpx.MockTransport` e o handshake TLS é feito em memória, com o PFX autoassinado de tests/pfx.py.
 """
 
+import json
 import logging
 import ssl
 import tempfile
@@ -13,8 +14,10 @@ from cryptography.hazmat.primitives import serialization
 
 from src.certificado import carregar_certificado
 from src.client import ClienteNfse, ErroConexao, contexto_tls
+from src.codec import codificar, decodificar
 from src.config import Config
 from src.dps import gerar_id
+from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
 from tests.pfx import CNPJ, gerar_pfx
 
 SENHA = "s3nh4-f1ct1c14-xyz"
@@ -235,6 +238,205 @@ def test_erro_de_conexao_vira_erro_conexao(cert):
         cliente.consultar_dps(ID_DPS)
     assert erro.value.__cause__ is None
     assert erro.value.__context__ is None
+
+
+# --- envio e consultas da API (T-007) ---------------------------------------------------
+
+
+CHAVE = "3" * 50  # fictícia
+NFSE_XML = "<NFSe>fictícia</NFSe>".encode()
+QUANDO = "2026-10-12T10:00:00-03:00"
+
+
+def json_resposta(status: int, corpo) -> httpx.Response:
+    return httpx.Response(status, json=corpo)
+
+
+def sucesso(**over) -> dict:
+    corpo = {
+        "tipoAmbiente": 2,
+        "versaoAplicativo": "Ficticio_1.0",
+        "dataHoraProcessamento": QUANDO,
+        "idDps": ID_DPS,
+        "chaveAcesso": CHAVE,
+        "nfseXmlGZipB64": codificar(NFSE_XML),
+        "alertas": [{"codigo": "A0001", "descricao": "alerta fictício", "complemento": None}],
+    }
+    corpo.update(over)
+    return corpo
+
+
+def erro_post(*erros, status=400) -> httpx.Response:
+    return json_resposta(
+        status,
+        {
+            "tipoAmbiente": 2,
+            "versaoAplicativo": "Ficticio_1.0",
+            "dataHoraProcessamento": QUANDO,
+            "idDPS": ID_DPS,
+            "erros": [{"codigo": c, "descricao": d, "complemento": None} for c, d in erros],
+        },
+    )
+
+
+def test_emitir_faz_post_com_a_dps_em_gzip_base64(cert):
+    pedidos = []
+    with ClienteNfse(
+        config(), cert, transporte=transporte(json_resposta(201, sucesso()), pedidos)
+    ) as cliente:
+        emitida = cliente.emitir(b"<DPS/>")
+    [pedido] = pedidos
+    assert (pedido.method, str(pedido.url)) == ("POST", f"{BASE}/nfse")
+    assert pedido.headers["content-type"] == "application/json"
+    assert decodificar(json.loads(pedido.content)["dpsXmlGZipB64"]) == b"<DPS/>"
+    assert emitida.chave == CHAVE
+    assert emitida.id_dps == ID_DPS
+    assert emitida.xml == NFSE_XML
+    assert emitida.alertas == (MensagemApi("A0001", "alerta fictício", None),)
+
+
+def test_emitir_sem_alertas(cert):
+    resposta = json_resposta(201, sucesso(alertas=None))
+    with ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente:
+        assert cliente.emitir(b"<DPS/>").alertas == ()
+
+
+@pytest.mark.parametrize("status", [400, 403, 500])
+def test_emitir_rejeitada_traz_status_id_e_mensagens(cert, status):
+    resposta = erro_post(
+        ("E0014", "Conjunto já existe"), ("E0008", "Data de emissão posterior"), status=status
+    )
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RejeicaoApi) as erro,
+    ):
+        cliente.emitir(b"<DPS/>")
+    assert erro.value.status == status
+    assert erro.value.id_dps == ID_DPS
+    assert [m.codigo for m in erro.value.mensagens] == ["E0014", "E0008"]
+    texto = str(erro.value)
+    assert f"HTTP {status}" in texto
+    assert "E0014: Conjunto já existe" in texto
+    assert "E0008: Data de emissão posterior" in texto
+
+
+@pytest.mark.parametrize(
+    ("resposta", "motivo"),
+    [
+        (httpx.Response(201, content=b"<html/>"), "não é JSON"),
+        (json_resposta(201, ["lista"]), "não é um objeto JSON"),
+        (json_resposta(201, sucesso(chaveAcesso=None)), "chaveAcesso"),
+        (json_resposta(201, sucesso(chaveAcesso="123")), "chaveAcesso"),
+        (json_resposta(201, sucesso(idDps="DPS1")), "idDps"),
+        (json_resposta(201, sucesso(nfseXmlGZipB64="não é base64")), "nfseXmlGZipB64"),
+        (json_resposta(201, sucesso(alertas="x")), "alertas"),
+        (json_resposta(400, {"erros": "x"}), "erros"),
+        (httpx.Response(400, content=b""), "não é JSON"),
+        (httpx.Response(502, content=b"Bad Gateway"), "HTTP 502"),
+        (json_resposta(200, sucesso()), "HTTP 200"),
+    ],
+)
+def test_emitir_resposta_inesperada(cert, resposta, motivo):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RespostaInesperada, match=motivo) as erro,
+    ):
+        cliente.emitir(b"<DPS/>")
+    # O corpo bruto da resposta não vai para a mensagem.
+    assert "Bad Gateway" not in str(erro.value)
+    assert "<html/>" not in str(erro.value)
+
+
+def test_emitir_erro_de_conexao(cert):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(httpx.ReadTimeout("simulado"))) as c,
+        pytest.raises(ErroConexao, match="ReadTimeout"),
+    ):
+        c.emitir(b"<DPS/>")
+
+
+def test_emitir_so_aceita_bytes(cert):
+    pedidos = []
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(httpx.Response(201), pedidos)) as c,
+        pytest.raises(TypeError, match="bytes"),
+    ):
+        c.emitir("<DPS/>")
+    assert pedidos == []
+
+
+def test_chave_da_dps_existente(cert):
+    pedidos = []
+    resposta = json_resposta(
+        200,
+        {
+            "tipoAmbiente": 2,
+            "versaoAplicativo": "x",
+            "dataHoraProcessamento": QUANDO,
+            "idDps": ID_DPS,
+            "chaveAcesso": CHAVE,
+        },
+    )
+    with ClienteNfse(config(), cert, transporte=transporte(resposta, pedidos)) as cliente:
+        assert cliente.chave_da_dps(ID_DPS) == CHAVE
+    assert [(p.method, str(p.url)) for p in pedidos] == [("GET", f"{BASE}/dps/{ID_DPS}")]
+
+
+def test_chave_da_dps_inexistente(cert):
+    resposta = json_resposta(
+        404, {"erro": {"codigo": "E404", "descricao": "não encontrada", "complemento": None}}
+    )
+    with ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente:
+        assert cliente.chave_da_dps(ID_DPS) is None
+
+
+def test_chave_da_dps_com_erro_400(cert):
+    resposta = json_resposta(
+        400, {"erro": {"codigo": "E400", "descricao": "Id inválido", "complemento": None}}
+    )
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RejeicaoApi, match="E400: Id inválido"),
+    ):
+        cliente.chave_da_dps(ID_DPS)
+
+
+def test_chave_da_dps_recusa_id_fora_do_formato(cert):
+    pedidos = []
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(httpx.Response(200), pedidos)) as c,
+        pytest.raises(ValueError, match="Id da DPS"),
+    ):
+        c.chave_da_dps("DPS123")
+    assert pedidos == []
+
+
+def test_obter_nfse_pela_chave(cert):
+    pedidos = []
+    resposta = json_resposta(
+        200,
+        {
+            "tipoAmbiente": 2,
+            "versaoAplicativo": "x",
+            "dataHoraProcessamento": QUANDO,
+            "chaveAcesso": CHAVE,
+            "nfseXmlGZipB64": codificar(NFSE_XML),
+        },
+    )
+    with ClienteNfse(config(), cert, transporte=transporte(resposta, pedidos)) as cliente:
+        assert cliente.obter_nfse(CHAVE) == NFSE_XML
+    assert [(p.method, str(p.url)) for p in pedidos] == [("GET", f"{BASE}/nfse/{CHAVE}")]
+
+
+@pytest.mark.parametrize("chave", ["", "123", "a" * 50, CHAVE + "0", "../" + CHAVE[3:]])
+def test_obter_nfse_recusa_chave_fora_do_formato(cert, chave):
+    pedidos = []
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(httpx.Response(200), pedidos)) as c,
+        pytest.raises(ValueError, match="chave de acesso"),
+    ):
+        c.obter_nfse(chave)
+    assert pedidos == []
 
 
 # --- INV-05 -----------------------------------------------------------------------------

@@ -1,12 +1,13 @@
 """Cliente HTTP com mTLS para a API da SEFIN Nacional em produção restrita (T-015, DEC-031).
 
-Único módulo de src/ e de scripts/ que faz I/O de rede (B-2). Versão mínima: abre a conexão
-com o certificado do emitente e faz consultas que não emitem nem alteram nada. Envio da DPS,
-tratamento dos erros da API e retries ficam para a T-007.
+Único módulo de src/ e de scripts/ que faz I/O de rede (B-2). Abre a conexão com o
+certificado do emitente, envia a DPS assinada (`POST /nfse`) e consulta DPS e NFS-e (T-007,
+DEC-036). Não repete pedidos: a política de envio fica em `src/emissao.py`.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -19,13 +20,17 @@ import httpx
 from cryptography.hazmat.primitives import serialization
 
 from src.certificado import Certificado
+from src.codec import codificar, decodificar
 from src.config import Config
+from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
+from src.nfse import NfseEmitida
 
 # Só hosts da produção restrita (docs/SPEC.md §6). Produção é recusada (INV-02, DEC-002).
 SUFIXO_HOST = ".producaorestrita.nfse.gov.br"
 TEMPO_LIMITE = 30.0  # segundos
 
 _ID_DPS = re.compile(r"DPS\d{42}")
+_CHAVE = re.compile(r"\d{50}")
 _CAMINHO = re.compile(r"[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*")
 
 
@@ -140,9 +145,59 @@ class ClienteNfse:
             raise ValueError(f"caminho recusado: {caminho!r} (relativo à URL base, sem '.' e '..')")
         return self._pedir("GET", caminho)
 
-    def _pedir(self, metodo: str, caminho: str) -> Resposta:
+    def emitir(self, dps_assinada: bytes) -> NfseEmitida:
+        """`POST /nfse` com a DPS assinada em GZip+Base64; devolve a NFS-e gerada.
+
+        Não repete o envio em caso de falha: quem decide é `src/emissao.py`.
+        """
+        if not isinstance(dps_assinada, bytes):
+            raise TypeError(f"emitir espera bytes, recebido: {type(dps_assinada).__name__}")
+        resposta = self._pedir(
+            "POST", "nfse", corpo_json={"dpsXmlGZipB64": codificar(dps_assinada)}
+        )
+        if resposta.status == 201:
+            corpo = _objeto_json(resposta)
+            return NfseEmitida(
+                chave=_chave(resposta.status, corpo),
+                id_dps=_id_dps(resposta.status, corpo),
+                xml=_nfse_xml(resposta.status, corpo),
+                alertas=_mensagens(resposta.status, corpo.get("alertas"), "alertas"),
+            )
+        if resposta.status in (400, 403, 500):
+            raise _rejeicao(resposta)
+        raise RespostaInesperada(resposta.status, f"HTTP {resposta.status} não previsto no envio")
+
+    def chave_da_dps(self, id_dps: str) -> str | None:
+        """`GET /dps/{id}`: a chave de acesso da NFS-e gerada a partir da DPS, ou None."""
+        if not _ID_DPS.fullmatch(id_dps):
+            raise ValueError("Id da DPS fora do formato: 'DPS' seguido de 42 dígitos (INV-04)")
+        resposta = self._pedir("GET", f"dps/{id_dps}")
+        if resposta.status == 200:
+            return _chave(resposta.status, _objeto_json(resposta))
+        if resposta.status == 404:
+            return None
+        if resposta.status == 400:
+            raise _rejeicao(resposta)
+        raise RespostaInesperada(
+            resposta.status, f"HTTP {resposta.status} não previsto na consulta"
+        )
+
+    def obter_nfse(self, chave: str) -> bytes:
+        """`GET /nfse/{chave}`: o XML da NFS-e, já decodificado."""
+        if not _CHAVE.fullmatch(chave):
+            raise ValueError("chave de acesso fora do formato: 50 dígitos")
+        resposta = self._pedir("GET", f"nfse/{chave}")
+        if resposta.status == 200:
+            return _nfse_xml(resposta.status, _objeto_json(resposta))
+        if resposta.status in (400, 401, 403, 404):
+            raise _rejeicao(resposta)
+        raise RespostaInesperada(
+            resposta.status, f"HTTP {resposta.status} não previsto na consulta"
+        )
+
+    def _pedir(self, metodo: str, caminho: str, *, corpo_json: dict | None = None) -> Resposta:
         try:
-            resposta = self._http.request(metodo, caminho)
+            resposta = self._http.request(metodo, caminho, json=corpo_json)
         except httpx.HTTPError as erro:
             mensagem = f"{type(erro).__name__}: {erro}"
             falha = True
@@ -152,3 +207,74 @@ class ClienteNfse:
             raise ErroConexao(mensagem)
         tipo = resposta.headers.get("content-type", "").split(";")[0].strip()
         return Resposta(status=resposta.status_code, tipo=tipo, corpo=resposta.content)
+
+
+# Leitura das respostas JSON da API (docs/SOURCES.md, especificação da SEFIN). Nenhuma
+# mensagem de erro daqui traz o corpo bruto da resposta.
+
+
+def _objeto_json(resposta: Resposta) -> dict:
+    try:
+        corpo = json.loads(resposta.corpo)
+    except ValueError:
+        raise RespostaInesperada(resposta.status, "corpo não é JSON") from None
+    if not isinstance(corpo, dict):
+        raise RespostaInesperada(resposta.status, "corpo não é um objeto JSON")
+    return corpo
+
+
+def _chave(status: int, corpo: dict) -> str:
+    chave = corpo.get("chaveAcesso")
+    if not isinstance(chave, str) or not _CHAVE.fullmatch(chave):
+        raise RespostaInesperada(status, "chaveAcesso ausente ou fora do formato de 50 dígitos")
+    return chave
+
+
+def _id_dps(status: int, corpo: dict) -> str:
+    id_dps = corpo.get("idDps")
+    if not isinstance(id_dps, str) or not _ID_DPS.fullmatch(id_dps):
+        raise RespostaInesperada(status, "idDps ausente ou fora do formato")
+    return id_dps
+
+
+def _nfse_xml(status: int, corpo: dict) -> bytes:
+    texto = corpo.get("nfseXmlGZipB64")
+    if not isinstance(texto, str):
+        raise RespostaInesperada(status, "nfseXmlGZipB64 ausente")
+    try:
+        return decodificar(texto)
+    except ValueError as erro:
+        motivo = f"nfseXmlGZipB64 inválido: {erro}"
+    raise RespostaInesperada(status, motivo)
+
+
+def _mensagem(item: object) -> MensagemApi | None:
+    if not isinstance(item, dict):
+        return None
+    codigo, descricao = item.get("codigo"), item.get("descricao")
+    complemento = item.get("complemento")
+    if not isinstance(codigo, str) or not isinstance(descricao, str):
+        return None
+    return MensagemApi(codigo, descricao, complemento if isinstance(complemento, str) else None)
+
+
+def _mensagens(status: int, lista: object, campo: str) -> tuple[MensagemApi, ...]:
+    if lista is None:
+        return ()
+    if not isinstance(lista, list):
+        raise RespostaInesperada(status, f"{campo} não é uma lista")
+    mensagens = tuple(_mensagem(item) for item in lista)
+    if None in mensagens:
+        raise RespostaInesperada(status, f"{campo} com item fora do formato codigo/descricao")
+    return mensagens
+
+
+def _rejeicao(resposta: Resposta) -> RejeicaoApi:
+    corpo = _objeto_json(resposta)
+    # O envio devolve uma lista `erros`; as consultas, um objeto `erro` só.
+    if "erros" in corpo:
+        mensagens = _mensagens(resposta.status, corpo["erros"], "erros")
+    else:
+        mensagens = _mensagens(resposta.status, [corpo["erro"]] if "erro" in corpo else [], "erro")
+    id_dps = corpo.get("idDPS")
+    return RejeicaoApi(resposta.status, id_dps if isinstance(id_dps, str) else None, mensagens)

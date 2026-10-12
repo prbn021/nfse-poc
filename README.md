@@ -118,6 +118,25 @@ Para assinar a DPS de exemplo com o certificado de um emitente e empacotá-la em
 
 O script monta a mesma DPS de exemplo de `gerar_dps.py`, com o prestador do emitente, assina com o certificado dele, confere a assinatura e valida contra o XSD. Salva em `out\` a DPS assinada (`<Id>-assinada.xml`) e a mesma DPS em GZip+Base64 (`<Id>-assinada.b64`). Código de saída: `0` tudo conferido, `1` emitente, certificado, senha ou assinatura com problema (por exemplo, o CNPJ do certificado não é o do emitente), `2` XSD não encontrado. Não usa rede e não envia nada: mostra que a chave assina e que a assinatura confere localmente, não que a SEFIN a aceita.
 
+Para emitir a DPS de exemplo em produção restrita (sem valor fiscal), com o certificado de um emitente:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\emitir.py --emitente minha-empresa --n-dps 1
+```
+
+Use um `--n-dps` novo a cada envio (a SEFIN recusa série e número repetidos, E0014). O script monta a DPS de exemplo sem `cTribMun`, assina, confere e valida; grava `out\<Id>-enviada.xml`; consulta se já existe nota para aquele Id e, se não existir, envia uma vez só. A NFS-e devolvida vai para `out\NFSe<chave>.xml` e é conferida (XSD, Ids, ambiente e assinatura do sistema). Se a conexão cair no envio, ele não reenvia: consulta a DPS e baixa a nota, se ela tiver sido gerada. Mostra a chave de acesso, os alertas e os códigos de erro da SEFIN.
+
+| Código de saída | Significado |
+| --------------- | ----------- |
+| `0` | NFS-e emitida, salva e conferida |
+| `1` | erro antes do envio (emitente, certificado, assinatura, XSD, ou ambiente que não é produção restrita) |
+| `3` | erro de rede, e nenhuma NFS-e foi gerada: pode enviar de novo |
+| `4` | a SEFIN rejeitou a DPS (os códigos aparecem na tela) |
+| `5` | já existe NFS-e para esta série e número: use outro `--n-dps` |
+| `6` | envio incerto: a conexão caiu e a consulta também; não reenvie, consulte mais tarde |
+| `7` | NFS-e gerada e salva, mas algo não bateu na conferência |
+| `8` | resposta da SEFIN fora do formato esperado |
+
 ## Testar
 
 ```powershell

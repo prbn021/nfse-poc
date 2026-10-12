@@ -11,6 +11,7 @@ DPS (INV-05); erros do signxml são trocados por uma mensagem própria. Sem log 
 
 from __future__ import annotations
 
+import base64
 import logging
 
 from cryptography import x509
@@ -117,3 +118,26 @@ def conferir_assinatura(xml: bytes, certificado: x509.Certificate) -> None:
         falhou = False
     if falhou:
         raise ValueError("assinatura inválida para este certificado")
+
+
+def conferir_assinatura_do_sistema(xml: bytes) -> None:
+    """Confere a assinatura de um documento com o certificado que vem no próprio `KeyInfo`.
+
+    Serve para a NFS-e devolvida pela SEFIN (T-007): mostra que o XML não mudou depois de
+    assinado, mas não que o certificado é do sistema nacional, porque não confere a cadeia.
+    Levanta `ValueError` se a assinatura faltar ou não conferir.
+    """
+    parser = etree.XMLParser(resolve_entities=False, no_network=True)
+    try:
+        raiz = etree.fromstring(xml, parser)
+        texto = raiz.findtext(
+            f"{{{_DS}}}Signature/{{{_DS}}}KeyInfo/{{{_DS}}}X509Data/{{{_DS}}}X509Certificate"
+        )
+        certificado = x509.load_der_x509_certificate(
+            base64.b64decode("".join((texto or "").split()))
+        )
+    except (etree.LxmlError, ValueError):
+        certificado = None
+    if certificado is None:
+        raise ValueError("documento sem assinatura ou sem certificado no KeyInfo")
+    conferir_assinatura(xml, certificado)
