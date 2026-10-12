@@ -29,6 +29,7 @@ ERRO_DE_REDE = 3
 RESPOSTA_INESPERADA = 8
 _C_TRIB_NAC = re.compile(r"\d{6}")
 _MUNICIPIO = re.compile(r"\d{7}")
+_DESDOBRAMENTO = re.compile(r"\d{3}")
 SEM_DESDOBRAMENTO = "000"  # desdobramento municipal "nenhum", segundo terceiros (SOURCES)
 
 
@@ -43,11 +44,11 @@ def _pares(item: object) -> str:
     return ", ".join(f"{chave}={valor}" for chave, valor in item.items())
 
 
-def _pontuado(c_trib_nac: str) -> str:
-    return f"{c_trib_nac[:2]}.{c_trib_nac[2:4]}.{c_trib_nac[4:6]}.{SEM_DESDOBRAMENTO}"
+def _pontuado(c_trib_nac: str, desdobramento: str = SEM_DESDOBRAMENTO) -> str:
+    return f"{c_trib_nac[:2]}.{c_trib_nac[2:4]}.{c_trib_nac[4:6]}.{desdobramento}"
 
 
-def _varrer(cliente: ClienteNfse, municipio: str, servicos, saida: Path) -> int:
+def _varrer(cliente: ClienteNfse, municipio: str, servicos, saida: Path, desdobramento: str) -> int:
     """Histórico de alíquotas de cada código da lista nacional, no formato pontuado (DEC-042).
 
     Mostra os códigos com alíquota; grava em out/ um resumo com o status de cada código.
@@ -59,7 +60,7 @@ def _varrer(cliente: ClienteNfse, municipio: str, servicos, saida: Path) -> int:
         print(f"Convênio de {municipio}: {_resumo(convenio)}")
         for codigo, descricao in servicos:
             try:
-                historico = cliente.historico_aliquotas(municipio, _pontuado(codigo))
+                historico = cliente.historico_aliquotas(municipio, _pontuado(codigo, desdobramento))
             except RespostaInesperada as erro:
                 resumo.append({"codigo": codigo, "status": erro.status, "mensagem": erro.motivo})
                 continue
@@ -119,6 +120,12 @@ def main(
         "(Anexo B) e mostra os que o município tem; só GET, um por código",
     )
     parser.add_argument("--municipio", help="código IBGE do município (padrão: o do emitente)")
+    parser.add_argument(
+        "--desdobramento",
+        default=SEM_DESDOBRAMENTO,
+        help="desdobramento municipal do código, 3 dígitos; é o cTribMun da DPS "
+        "(padrão: %(default)s, nenhum)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -135,6 +142,8 @@ def main(
         municipio = args.municipio or emitente.municipio
         if not _MUNICIPIO.fullmatch(municipio):
             raise ValueError("--municipio deve ter 7 dígitos (código IBGE)")
+        if not _DESDOBRAMENTO.fullmatch(args.desdobramento):
+            raise ValueError("--desdobramento deve ter 3 dígitos")
         cert = carregar_certificado(emitente.cert_path, emitente.cert_senha)
         cliente = ClienteNfse(config, cert, api="adn", transporte=transporte)
     except ValueError as erro:
@@ -144,11 +153,12 @@ def main(
     saida.mkdir(parents=True, exist_ok=True)
     if args.varrer:
         with cliente:
-            return _varrer(cliente, municipio, servicos, saida)
+            return _varrer(cliente, municipio, servicos, saida, args.desdobramento)
     # A API real recusou 6 dígitos e 9 dígitos com zero à esquerda (DEC-041): tenta também o
     # formato pontuado do guia do painel municipal.
     c = args.c_trib_nac
-    codigos = [c + SEM_DESDOBRAMENTO, _pontuado(c)]
+    d = args.desdobramento
+    codigos = [c + d, _pontuado(c, d)]
     with cliente:
         print(f"ADN: {cliente.base_url}")
         arquivo = saida / f"adn-{municipio}-convenio.json"

@@ -111,6 +111,25 @@ def test_consulta_convenio_e_historico_com_9_digitos_e_pontuado(emitentes, tmp_p
     assert (saida / "adn-3304557-99.01.01.000-historicoaliquotas.json").exists()
 
 
+def test_desdobramento_municipal_vem_do_argumento(emitentes, tmp_path, capsys):
+    # A nota real do emitente traz cTribMun 001: o código no município seria NN.NN.NN.001.
+    pedidos = []
+    assert rodar(emitentes, tmp_path, adn(pedidos, respostas={}), "--desdobramento", "001") == 0
+    assert pedidos[1:] == [
+        "/parametrizacao/3304557/990101001/historicoaliquotas",
+        "/parametrizacao/3304557/99.01.01.001/historicoaliquotas",
+    ]
+
+
+@pytest.mark.parametrize("desdobramento", ["1", "0001", "abc"])
+def test_desdobramento_fora_do_formato(emitentes, tmp_path, capsys, desdobramento):
+    pedidos = []
+    transporte = adn(pedidos, respostas={})
+    assert rodar(emitentes, tmp_path, transporte, "--desdobramento", desdobramento) == 1
+    assert pedidos == []
+    assert "--desdobramento" in capsys.readouterr().err
+
+
 def test_municipio_pode_ser_outro_que_o_do_emitente(emitentes, tmp_path, capsys):
     pedidos = []
     assert rodar(emitentes, tmp_path, adn(pedidos, respostas={}), "--municipio", "3550308") == 0
@@ -210,6 +229,15 @@ def test_varredura_lista_os_codigos_com_aliquota(emitentes, tmp_path, capsys, mo
     assert resumo[1]["aliquotas"] == {
         "99.01.02.000": [{"Aliq": 2.0, "DtIni": "2025-01-01T00:00:00"}]
     }
+
+
+def test_varredura_com_desdobramento(emitentes, tmp_path, monkeypatch):
+    pedidos = []
+    transporte = adn(pedidos, respostas={})
+    assert (
+        rodar_varredura(emitentes, tmp_path, transporte, monkeypatch, "--desdobramento", "001") == 0
+    )
+    assert pedidos[1] == "/parametrizacao/3304557/99.01.01.001/historicoaliquotas"
 
 
 def test_varredura_sem_nenhum_codigo(emitentes, tmp_path, capsys, monkeypatch):
