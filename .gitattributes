@@ -1,2 +1,4 @@
 *.pdf binary
 *.xlsx binary
+# Dados golden dos testes: comparados byte a byte, sem conversão de fim de linha.
+tests/dados/** -text

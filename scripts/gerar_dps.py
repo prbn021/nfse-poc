@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import carregar_config
 from src.dps import (
     Dps,
+    PisCofins,
     Prestador,
     Servico,
     Tomador,
@@ -45,6 +46,8 @@ def dps_exemplo(
         prestador=Prestador(
             cnpj=emitente.cnpj,
             inscricao_municipal=emitente.inscricao_municipal,
+            fone=emitente.fone,
+            email=emitente.email,
             op_simp_nac=emitente.op_simp_nac,
             reg_esp_trib=emitente.reg_esp_trib,
             reg_ap_trib_sn=emitente.reg_ap_trib_sn,
@@ -53,9 +56,15 @@ def dps_exemplo(
         servico=Servico(
             c_loc_prestacao="3304557",
             c_trib_nac="010101",
+            c_trib_mun="001",
             descricao="Desenvolvimento de software sob encomenda",
         ),
-        valores=Valores(v_serv=Decimal("100.00"), p_tot_trib_sn=p_tot_trib_sn),
+        valores=Valores(
+            v_serv=Decimal("100.00"),
+            p_tot_trib_sn=p_tot_trib_sn,
+            # Perfil da nota real do primeiro emitente: sem incidência, sem retenção (T-018).
+            pis_cofins=PisCofins(cst="08", tp_ret_pis_cofins=0),
+        ),
     )
 
 

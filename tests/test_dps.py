@@ -1,6 +1,7 @@
 import dataclasses
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from lxml import etree
@@ -9,6 +10,7 @@ from src.config import RAIZ
 from src.dps import (
     NS,
     Dps,
+    PisCofins,
     Prestador,
     Servico,
     Tomador,
@@ -31,6 +33,8 @@ def _prestador(**over) -> Prestador:
     base = dict(
         cnpj="11222333000181",
         inscricao_municipal="12345",
+        fone=None,
+        email=None,
         op_simp_nac=3,
         reg_esp_trib=0,
         reg_ap_trib_sn=1,
@@ -262,8 +266,14 @@ def test_nenhum_default_de_src_carrega_dado_de_emitente():
     # restantes são do leiaute ou da nota, não de um emitente.
     assert _defaults(Prestador) == {}
     assert _defaults(Tomador) == {"cnpj": None, "cpf": None}
-    assert _defaults(Servico) == {}
-    assert _defaults(Valores) == {"trib_issqn": 1, "tp_ret_issqn": 1, "p_aliq": None}
+    assert _defaults(Servico) == {"c_trib_mun": None}
+    assert _defaults(Valores) == {
+        "trib_issqn": 1,
+        "tp_ret_issqn": 1,
+        "p_aliq": None,
+        "pis_cofins": None,
+    }
+    assert _defaults(PisCofins) == {"tp_ret_pis_cofins": None}
     assert _defaults(Dps) == {"ver_aplic": "nfse-poc-0.1", "tp_emit": 1}
 
 
@@ -284,3 +294,110 @@ def test_serie_fora_da_faixa_do_aplicativo_proprio_e_recusada(serie):
     # A mensagem diz por quê: 50000 a 89999 são dos emissores oficiais (E0010).
     assert "aplicativo próprio" in str(erro.value)
     assert "E0010" in str(erro.value)
+
+
+# --- campos opcionais usados nas notas atuais (T-018, DEC-023) -------------------------------
+
+GOLDEN = Path(__file__).parent / "dados" / "dps-sem-opcionais.xml"
+EMAIL = "contato@empresa-ficticia.com.br"
+FONE = "2133334444"
+
+
+def _dps_completa(**valores) -> Dps:
+    return _dps(
+        prestador=_prestador(fone=FONE, email=EMAIL),
+        servico=Servico(
+            c_loc_prestacao="3304557", c_trib_nac="010101", c_trib_mun="001", descricao="Serviço"
+        ),
+        valores=_valores(pis_cofins=PisCofins(cst="08", tp_ret_pis_cofins=0), **valores),
+    )
+
+
+def test_sem_os_campos_opcionais_o_xml_e_igual_ao_de_antes():
+    # Golden gerado pelo código de antes da T-018, com o mesmo _dps().
+    assert para_xml(_dps()) == GOLDEN.read_bytes()
+
+
+def test_campos_opcionais_nas_posicoes_do_xsd(xsd):
+    xml = para_xml(_dps_completa())
+    assert validar_xml(xml, xsd) == []
+    raiz = etree.fromstring(xml)
+    assert _filhos(raiz, "n:infDPS/n:prest") == ["CNPJ", "IM", "fone", "email", "regTrib"]
+    assert _filhos(raiz, "n:infDPS/n:serv/n:cServ") == ["cTribNac", "cTribMun", "xDescServ"]
+    assert _filhos(raiz, "n:infDPS/n:valores/n:trib") == ["tribMun", "tribFed", "totTrib"]
+    piscofins = "n:infDPS/n:valores/n:trib/n:tribFed/n:piscofins"
+    assert _filhos(raiz, "n:infDPS/n:valores/n:trib/n:tribFed") == ["piscofins"]
+    assert _filhos(raiz, piscofins) == ["CST", "tpRetPisCofins"]
+    assert raiz.findtext(f"{piscofins}/n:CST", namespaces=N) == "08"
+    assert raiz.findtext(f"{piscofins}/n:tpRetPisCofins", namespaces=N) == "0"
+    assert raiz.findtext(".//n:cTribMun", namespaces=N) == "001"
+    assert raiz.findtext(".//n:fone", namespaces=N) == FONE
+    assert raiz.findtext(".//n:email", namespaces=N) == EMAIL
+
+
+def test_piscofins_sem_tipo_de_retencao(xsd):
+    dps = _dps(valores=_valores(pis_cofins=PisCofins(cst="01")))
+    xml = para_xml(dps)
+    assert validar_xml(xml, xsd) == []
+    piscofins = "n:infDPS/n:valores/n:trib/n:tribFed/n:piscofins"
+    assert _filhos(etree.fromstring(xml), piscofins) == ["CST"]
+
+
+@pytest.mark.parametrize(
+    "cst", ["00", "01", "08", "09", "49", "50", "56", "60", "67", "75", "98", "99"]
+)
+def test_cst_da_tabela_e_aceito(xsd, cst):
+    xml = para_xml(_dps(valores=_valores(pis_cofins=PisCofins(cst=cst))))
+    assert validar_xml(xml, xsd) == []
+
+
+@pytest.mark.parametrize("cst", ["10", "48", "57", "76", "97", "1", "001", "", 8, None])
+def test_cst_fora_da_tabela_e_recusado(cst):
+    with pytest.raises(ValueError, match="CST"):
+        PisCofins(cst=cst)
+
+
+@pytest.mark.parametrize("tipo", [0, 2])
+def test_tp_ret_pis_cofins_aceito(xsd, tipo):
+    xml = para_xml(_dps(valores=_valores(pis_cofins=PisCofins(cst="08", tp_ret_pis_cofins=tipo))))
+    assert validar_xml(xml, xsd) == []
+
+
+@pytest.mark.parametrize("tipo", [1, 3, 4, 5, 6, 7, 8, 9])
+def test_tp_ret_pis_cofins_com_retencao_ainda_nao_suportado(tipo):
+    # Anexo I: fora de 0 e 2, vRetCSLL é obrigatório, e ele fica para a T-025 (DEC-033).
+    with pytest.raises(ValueError, match=r"ainda não suportado.*vRetCSLL"):
+        PisCofins(cst="08", tp_ret_pis_cofins=tipo)
+
+
+@pytest.mark.parametrize("tipo", [-1, 10, "0", True])
+def test_tp_ret_pis_cofins_fora_da_tabela(tipo):
+    with pytest.raises(ValueError, match="tpRetPisCofins"):
+        PisCofins(cst="08", tp_ret_pis_cofins=tipo)
+
+
+@pytest.mark.parametrize("codigo", ["1", "12", "1234", "abc", "", " 01"])
+def test_ctribmun_fora_de_3_digitos(codigo):
+    with pytest.raises(ValueError, match="c_trib_mun"):
+        Servico(c_loc_prestacao="3304557", c_trib_nac="010101", c_trib_mun=codigo, descricao="S")
+
+
+@pytest.mark.parametrize(
+    "email",
+    ["sem-arroba", "a@b", "@empresa.com.br", "a b@empresa.com.br", "a@@empresa.com", "a@.com", ""],
+)
+def test_email_sem_estrutura_de_email_e_recusado(email):
+    # E0148: o e-mail precisa ter estrutura de e-mail.
+    with pytest.raises(ValueError, match="email"):
+        _prestador(email=email)
+
+
+def test_email_com_mais_de_80_caracteres_e_recusado():
+    with pytest.raises(ValueError, match="email"):
+        _prestador(email="a" * 70 + "@empresa.com.br")
+
+
+@pytest.mark.parametrize("fone", ["12345", "1" * 21, "(21) 3333-4444", "", "abcdef"])
+def test_fone_fora_do_padrao_e_recusado(fone):
+    with pytest.raises(ValueError, match="fone"):
+        _prestador(fone=fone)

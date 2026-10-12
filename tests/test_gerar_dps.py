@@ -29,6 +29,17 @@ def test_exemplo_usa_o_perfil_mais_comum_da_carteira():
     assert dps.valores.p_tot_trib_sn == gerar_dps.P_TOT_TRIB_SN_FICTICIO
 
 
+def test_exemplo_emite_os_campos_opcionais_das_notas_atuais():
+    # T-018: cTribMun, fone, email e PIS/COFINS, com dados fictícios. O perfil de PIS/COFINS
+    # é o da nota real do primeiro emitente: CST 08, sem retenção.
+    emitente = carregar_emitente("exemplo")
+    dps = gerar_dps.dps_exemplo(2, emitente)
+    assert dps.servico.c_trib_mun is not None
+    assert (dps.prestador.fone, dps.prestador.email) == (emitente.fone, emitente.email)
+    assert dps.valores.pis_cofins.cst == "08"
+    assert dps.valores.pis_cofins.tp_ret_pis_cofins == 0
+
+
 def test_ptottribsn_vem_do_argumento():
     dps = gerar_dps.dps_exemplo(2, carregar_emitente("exemplo"), Decimal("4.50"))
     assert dps.valores.p_tot_trib_sn == Decimal("4.50")
@@ -41,6 +52,8 @@ def test_dps_usa_os_dados_do_emitente_recebido():
         cnpj="99888777000161",
         municipio="3550308",
         inscricao_municipal="98765",
+        fone=None,
+        email=None,
         op_simp_nac=3,
         reg_esp_trib=0,
         reg_ap_trib_sn=1,

@@ -89,6 +89,7 @@ Copy-Item emitentes\exemplo.toml emitentes\minha-empresa.toml   # depois edite o
 
 - Sem `--emitente`, o script usa o `exemplo`.
 - O nome do arquivo usa só letras minúsculas, dígitos, `-` e `_`.
+- `fone` (só dígitos, com DDD) e `email` são opcionais; quando existem, vão para a DPS (T-018).
 - `reg_ap_trib_sn` (regime de apuração do Simples) é obrigatório para ME/EPP desde a T-010. Hoje o modelo só emite com `1` (tributos pelo Simples). Um arquivo criado antes disso precisa ganhar essa linha.
 - Tomador, serviço e valores da DPS gerada continuam fictícios, fixos no script.
 - A senha fica em texto no arquivo. Não copie esses arquivos para fora da máquina nem os adicione ao git: a verificação `checar_segredos.py` falha se um deles for rastreado.

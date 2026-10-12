@@ -38,6 +38,33 @@ _REG_AP_TRIB_SN = (1, 2, 3)
 # Série da DPS de aplicativo próprio (Anexo I v1.01, E0010; DEC-019).
 SERIE_MIN, SERIE_MAX = 1, 49999
 
+# Campos opcionais das notas atuais (T-018, DEC-023).
+_FONE = re.compile(r"[0-9]{6,20}")  # TSTelefone
+_EMAIL_MAX = 80  # TSEmail
+# E0148: "estrutura de e-mail". Conferência simples: algo@dominio.tld, sem espaços.
+_EMAIL = re.compile(r"[^@\s]+@[^@\s.]+(\.[^@\s.]+)+")
+_C_TRIB_MUN = re.compile(r"[0-9]{3}")  # TCCodTribMun
+# CST do PIS/COFINS (TSTipoCST).
+_CST = frozenset(
+    [f"{n:02d}" for n in range(10)]
+    + ["49", *(str(n) for n in range(50, 57)), *(str(n) for n in range(60, 68))]
+    + [*(str(n) for n in range(70, 76)), "98", "99"]
+)
+# tpRetPisCofins (TSTipoRetPISCofins): fora de 0 e 2, o Anexo I exige vRetCSLL, que fica
+# para a T-025 (DEC-033).
+_TP_RET_PIS_COFINS = range(10)
+_TP_RET_PIS_COFINS_SEM_CSLL = (0, 2)
+
+
+def fone_valido(fone: object) -> bool:
+    return isinstance(fone, str) and _FONE.fullmatch(fone) is not None
+
+
+def email_valido(email: object) -> bool:
+    return (
+        isinstance(email, str) and len(email) <= _EMAIL_MAX and _EMAIL.fullmatch(email) is not None
+    )
+
 
 # ----------------------------------------------------------------- modelo
 
@@ -48,12 +75,21 @@ class Prestador:
 
     cnpj: str
     inscricao_municipal: str | None
+    fone: str | None  # só dígitos, 6 a 20
+    email: str | None
     op_simp_nac: int  # 1=Não Optante, 2=MEI, 3=ME/EPP
     reg_esp_trib: int  # 0=Nenhum
     reg_ap_trib_sn: int | None  # só ME/EPP: 1=pelo SN, 2 e 3=ISSQN por fora
 
     def __post_init__(self):
         _so_digitos(self.cnpj, 14, "prestador.cnpj")
+        if self.fone is not None and not fone_valido(self.fone):
+            raise ValueError("prestador.fone deve ter de 6 a 20 dígitos, sem espaços nem sinais")
+        if self.email is not None and not email_valido(self.email):
+            raise ValueError(
+                f"prestador.email sem estrutura de e-mail (nome@dominio) ou com mais de "
+                f"{_EMAIL_MAX} caracteres (E0148)"
+            )
         if self.op_simp_nac not in _OP_SIMP_NAC:
             raise ValueError(
                 f"prestador.op_simp_nac deve ser 1, 2 ou 3, recebido: {self.op_simp_nac!r}"
@@ -103,12 +139,41 @@ class Servico:
     c_loc_prestacao: str  # código IBGE do município (7 dígitos)
     c_trib_nac: str  # código de tributação nacional (6 dígitos)
     descricao: str
+    # Código de tributação do município (3 dígitos). Precisa existir no município de
+    # incidência (E0314), o que só o servidor confere.
+    c_trib_mun: str | None = None
 
     def __post_init__(self):
         _so_digitos(self.c_loc_prestacao, 7, "servico.c_loc_prestacao")
         _so_digitos(self.c_trib_nac, 6, "servico.c_trib_nac")
+        if self.c_trib_mun is not None and not _C_TRIB_MUN.fullmatch(self.c_trib_mun):
+            raise ValueError("servico.c_trib_mun deve ter 3 dígitos numéricos")
         if not self.descricao.strip():
             raise ValueError("servico.descricao é obrigatória")
+
+
+@dataclass(frozen=True)
+class PisCofins:
+    """Grupo tribFed/piscofins, só com CST e tipo de retenção (T-018, DEC-023).
+
+    Base de cálculo, alíquotas e valores de PIS/COFINS ficam de fora.
+    """
+
+    cst: str  # dois dígitos, da tabela TSTipoCST (ex.: "08" = sem incidência)
+    tp_ret_pis_cofins: int | None = None  # 0 ou 2; os demais exigem vRetCSLL (T-025)
+
+    def __post_init__(self):
+        if self.cst not in _CST:
+            raise ValueError(f"CST do PIS/COFINS fora da tabela: {self.cst!r}")
+        tipo = self.tp_ret_pis_cofins
+        if tipo is None:
+            return
+        if isinstance(tipo, bool) or not isinstance(tipo, int) or tipo not in _TP_RET_PIS_COFINS:
+            raise ValueError(f"tpRetPisCofins fora da tabela (0 a 9): {tipo!r}")
+        if tipo not in _TP_RET_PIS_COFINS_SEM_CSLL:
+            raise ValueError(
+                f"tpRetPisCofins = {tipo} ainda não suportado: exige vRetCSLL (T-025, DEC-033)"
+            )
 
 
 @dataclass(frozen=True)
@@ -120,6 +185,7 @@ class Valores:
     trib_issqn: int = 1  # 1=Operação tributável
     tp_ret_issqn: int = 1  # 1=Não Retido, 2=Retido pelo Tomador, 3=Retido pelo Intermediário
     p_aliq: Decimal | None = None  # ME/EPP pelo SN: só com retenção, e então obrigatório
+    pis_cofins: PisCofins | None = None  # grupo tribFed/piscofins (T-018)
 
     def __post_init__(self):
         if Decimal(self.v_serv) <= 0:
@@ -218,6 +284,10 @@ def para_xml(dps: Dps) -> bytes:
     _sub(prest, "CNPJ", dps.prestador.cnpj)
     if dps.prestador.inscricao_municipal:
         _sub(prest, "IM", dps.prestador.inscricao_municipal)
+    if dps.prestador.fone is not None:
+        _sub(prest, "fone", dps.prestador.fone)
+    if dps.prestador.email is not None:
+        _sub(prest, "email", dps.prestador.email)
     reg = _sub(prest, "regTrib")
     _sub(reg, "opSimpNac", str(dps.prestador.op_simp_nac))
     if dps.prestador.reg_ap_trib_sn is not None:
@@ -236,6 +306,8 @@ def para_xml(dps: Dps) -> bytes:
     _sub(loc, "cLocPrestacao", dps.servico.c_loc_prestacao)
     cserv = _sub(serv, "cServ")
     _sub(cserv, "cTribNac", dps.servico.c_trib_nac)
+    if dps.servico.c_trib_mun is not None:
+        _sub(cserv, "cTribMun", dps.servico.c_trib_mun)
     _sub(cserv, "xDescServ", dps.servico.descricao)
 
     val = _sub(inf, "valores")
@@ -247,6 +319,11 @@ def para_xml(dps: Dps) -> bytes:
     _sub(tm, "tpRetISSQN", str(dps.valores.tp_ret_issqn))
     if dps.valores.p_aliq is not None:
         _sub(tm, "pAliq", _dinheiro(dps.valores.p_aliq))
+    if dps.valores.pis_cofins is not None:
+        pc = _sub(_sub(trib, "tribFed"), "piscofins")
+        _sub(pc, "CST", dps.valores.pis_cofins.cst)
+        if dps.valores.pis_cofins.tp_ret_pis_cofins is not None:
+            _sub(pc, "tpRetPisCofins", str(dps.valores.pis_cofins.tp_ret_pis_cofins))
     # ME/EPP: indTotTrib é proibido (E0712); vai o percentual do Simples (DEC-013).
     tot = _sub(trib, "totTrib")
     _sub(tot, "pTotTribSN", _dinheiro(dps.valores.p_tot_trib_sn))

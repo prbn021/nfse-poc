@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.config import RAIZ
+from src.dps import email_valido, fone_valido
 
 PASTA = RAIZ / "emitentes"
 EXEMPLO = "exemplo"
@@ -29,7 +30,7 @@ _ME_EPP = 3
 _SECAO = "certificado"
 _RAIZ_OBRIGATORIAS = ("cnpj", "municipio", "op_simp_nac", "reg_esp_trib")
 # reg_ap_trib_sn: obrigatória para ME/EPP e proibida para os demais (T-010).
-_RAIZ_OPCIONAIS = ("inscricao_municipal", "reg_ap_trib_sn")
+_RAIZ_OPCIONAIS = ("inscricao_municipal", "fone", "email", "reg_ap_trib_sn")
 _CERTIFICADO = ("caminho", "senha")
 
 
@@ -39,6 +40,8 @@ class Emitente:
     cnpj: str
     municipio: str  # código IBGE (7 dígitos)
     inscricao_municipal: str | None
+    fone: str | None
+    email: str | None
     op_simp_nac: int
     reg_esp_trib: int
     reg_ap_trib_sn: int | None  # só ME/EPP
@@ -121,6 +124,16 @@ def carregar_emitente(nome: str, pasta: Path = PASTA) -> Emitente:
             inscricao is None or _texto(inscricao),
             "texto não vazio (ou apague a linha)",
         ),
+        (
+            "fone",
+            "fone" not in dados or fone_valido(dados["fone"]),
+            "de 6 a 20 dígitos, entre aspas, sem espaços nem sinais (ou apague a linha)",
+        ),
+        (
+            "email",
+            "email" not in dados or email_valido(dados["email"]),
+            "e-mail com até 80 caracteres, entre aspas (ou apague a linha)",
+        ),
         ("op_simp_nac", _inteiro(dados["op_simp_nac"], _OP_SIMP_NAC), f"um de {_OP_SIMP_NAC}"),
         ("reg_esp_trib", _inteiro(dados["reg_esp_trib"], _REG_ESP_TRIB), f"um de {_REG_ESP_TRIB}"),
         (
@@ -142,6 +155,8 @@ def carregar_emitente(nome: str, pasta: Path = PASTA) -> Emitente:
         cnpj=dados["cnpj"],
         municipio=dados["municipio"],
         inscricao_municipal=inscricao,
+        fone=dados.get("fone"),
+        email=dados.get("email"),
         op_simp_nac=dados["op_simp_nac"],
         reg_esp_trib=dados["reg_esp_trib"],
         reg_ap_trib_sn=reg_ap,
