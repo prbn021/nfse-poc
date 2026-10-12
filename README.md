@@ -105,7 +105,7 @@ O script mostra só o titular, o CNPJ e a validade, e sai com código `1` se o e
 Para testar a conexão mTLS com a SEFIN Nacional em produção restrita, com o certificado de um emitente:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts	estar_conexao.py --emitente minha-empresa
+.\.venv\Scripts\python.exe scripts\testar_conexao.py --emitente minha-empresa
 ```
 
 O script não emite nada. Ele baixa a página de documentação da API e a especificação que ela aponta (as duas vão para `out\`) e consulta, com `HEAD /dps/{id}`, um Id de DPS que não existe; a resposta esperada é `404`. Mostra só a URL, os códigos HTTP e as rotas da especificação. Código de saída: `0` todas as consultas tiveram resposta HTTP, `1` emitente, certificado ou URL recusados (só `https://*.producaorestrita.nfse.gov.br` é aceita), `3` erro de rede ou de TLS. Usa a rede e o certificado real: é manual, fora dos testes.
