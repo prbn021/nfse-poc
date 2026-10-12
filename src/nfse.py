@@ -41,8 +41,11 @@ def _ler(xml: bytes) -> etree._Element | None:
     return raiz if raiz.tag == f"{{{NS}}}NFSe" else None
 
 
-def conferir_nfse(xml: bytes, *, chave: str, id_dps: str, xsd: Path) -> list[str]:
-    """Lista o que não bate na NFS-e devolvida; vazia quando está tudo certo."""
+def conferir_nfse(xml: bytes, *, chave: str, id_dps: str | None, xsd: Path) -> list[str]:
+    """Lista o que não bate na NFS-e devolvida; vazia quando está tudo certo.
+
+    Com `id_dps` None (consulta por chave, T-028), o Id da DPS embutida não é comparado.
+    """
     raiz = _ler(xml)
     if raiz is None:
         return ["o retorno não é uma NFS-e em XML"]
@@ -58,7 +61,9 @@ def conferir_nfse(xml: bytes, *, chave: str, id_dps: str, xsd: Path) -> list[str
         problemas.append("Id da NFS-e não corresponde à chave de acesso devolvida")
 
     inf_dps = raiz.find("n:infNFSe/n:DPS/n:infDPS", _N)
-    if inf_dps is None or inf_dps.get("Id") != id_dps:
+    if inf_dps is None and id_dps is None:
+        problemas.append("a NFS-e não traz a DPS")
+    elif id_dps is not None and (inf_dps is None or inf_dps.get("Id") != id_dps):
         problemas.append("a DPS dentro da NFS-e não é a enviada (Id diferente)")
     elif inf_dps.findtext("n:tpAmb", namespaces=_N) != _HOMOLOGACAO:
         problemas.append("tpAmb da NFS-e não é 2 (produção restrita)")

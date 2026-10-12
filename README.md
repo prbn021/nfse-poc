@@ -19,7 +19,7 @@ nfse-poc/
 ├── schema                #
 ├── scripts/
 │   ├── emitir.py         # emite uma nota de teste
-│   ├── consultar.py      # consulta por chave
+│   ├── consultar_nfse.py # consulta por chave e eventos
 │   └── baixar_danfse.py
 ├── src/
 │   ├── config.py         # carrega ambiente (homologação/produção)
@@ -28,6 +28,7 @@ nfse-poc/
 │   ├── assinatura.py     # XMLDSIG
 │   ├── codec.py          # gzip + base64 (ida e volta)
 │   ├── client.py         # HTTP com mTLS (POST /nfse, GET /nfse/{chave}...)
+│   ├── evento.py         # eventos de NFS-e (conferência do evento consultado)
 │   └── erros.py          # exceções mapeadas dos retornos da API
 ├── tests/
 ├── .env.example          # ambiente, base URL, pasta dos XSDs
@@ -164,6 +165,15 @@ Use um `--n-dps` novo a cada envio (a SEFIN recusa série e número repetidos, E
 | `6` | envio incerto: a conexão caiu e a consulta também; não reenvie, consulte mais tarde |
 | `7` | NFS-e gerada e salva, mas algo não bateu na conferência |
 | `8` | resposta da SEFIN fora do formato esperado |
+
+Para consultar em produção restrita uma NFS-e do emitente pela chave de acesso e, se quiser, um evento dela:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\consultar_nfse.py --emitente minha-empresa --chave <chave de 50 dígitos>
+.\.venv\Scripts\python.exe scripts\consultar_nfse.py --emitente minha-empresa --chave <chave> --evento 101101
+```
+
+O script só lê. Antes de qualquer pedido, ele recusa uma chave que não seja de nota do emitente (o CNPJ fica nas posições 10 a 23 da chave). A NFS-e vai para `out\NFSe<chave>-consulta.xml` e é conferida (XSD, Id, ambiente e assinatura do sistema). Com `--evento` (código de 6 dígitos; `101101` é o cancelamento) e `--seq` (padrão `1`), consulta também o evento, grava `out\Evento<chave>-<tipo>-<seq>.xml` e o confere; se a nota não tiver esse evento, ele avisa, e isso não é erro. Mostra só a chave, o número e o `cStat` da nota. Os códigos de saída são os do `emitir.py`: `0` consultada e conferida, `1` erro antes da consulta (inclusive chave de outro emitente), `3` erro de rede, `4` a SEFIN recusou a consulta, `7` algo não bateu na conferência (o arquivo é salvo mesmo assim), `8` resposta fora do formato esperado.
 
 ## Testar
 
