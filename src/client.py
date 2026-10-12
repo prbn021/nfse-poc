@@ -32,6 +32,10 @@ TEMPO_LIMITE = 30.0  # segundos
 
 _ID_DPS = re.compile(r"DPS\d{42}")
 _CHAVE = re.compile(r"\d{50}")
+_MUNICIPIO = re.compile(r"\d{7}")
+# 9 dígitos (cTribNac + desdobramento) ou o mesmo pontuado, como no guia do painel municipal.
+_CODIGO_SERVICO = re.compile(r"\d{9}|\d{2}\.\d{2}\.\d{2}\.\d{3}")
+_PARAMETRIZACAO = "parametrizacao"  # caminho da API de parâmetros municipais no ADN
 _CAMINHO = re.compile(r"[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*")
 
 
@@ -44,6 +48,19 @@ class Resposta:
     status: int
     tipo: str  # Content-Type, sem parâmetros
     corpo: bytes = field(repr=False)
+
+
+@dataclass(frozen=True)
+class ConsultaParametros:
+    """Resposta de uma consulta de parâmetros municipais no ADN (T-026)."""
+
+    status: int
+    corpo: dict = field(repr=False)  # chaves do primeiro nível em minúsculas
+    bruto: bytes = field(repr=False)
+
+    @property
+    def mensagem(self) -> str | None:
+        return _texto(self.corpo.get("mensagem"))
 
 
 def contexto_tls(cert: Certificado) -> ssl.SSLContext:
@@ -80,13 +97,21 @@ def contexto_tls(cert: Certificado) -> ssl.SSLContext:
     return contexto
 
 
-def _conferir_destino(config: Config) -> None:
-    """INV-02: só a produção restrita, por ambiente e por URL."""
+# APIs que o cliente alcança: nome -> (atributo de Config, variável do .env).
+APIS = {"sefin": ("sefin_url", "NFSE_SEFIN_URL"), "adn": ("adn_url", "NFSE_ADN_URL")}
+
+
+def _conferir_destino(config: Config, api: str) -> str:
+    """INV-02: só a produção restrita, por ambiente e por URL. Devolve a URL base da API."""
+    if api not in APIS:
+        raise ValueError(f"api desconhecida: {api!r} (use {', '.join(APIS)})")
     if config.ambiente != "homologacao":
         raise ValueError(
             f"ambiente {config.ambiente!r} recusado: só produção restrita (INV-02, DEC-002)"
         )
-    partes = urlsplit(config.sefin_url)
+    atributo, variavel = APIS[api]
+    url = getattr(config, atributo)
+    partes = urlsplit(url)
     host = partes.hostname or ""
     if (
         partes.scheme != "https"
@@ -96,34 +121,43 @@ def _conferir_destino(config: Config) -> None:
         or partes.fragment
     ):
         raise ValueError(
-            f"NFSE_SEFIN_URL {config.sefin_url!r} recusada: só https://*{SUFIXO_HOST} "
-            "(INV-02, DEC-002)"
+            f"{variavel} {url!r} recusada: só https://*{SUFIXO_HOST} (INV-02, DEC-002)"
         )
+    return url
 
 
 class ClienteNfse:
-    """Conexão mTLS com a SEFIN Nacional. Use com `with`, para fechar a conexão."""
+    """Conexão mTLS com a SEFIN Nacional ou, com `api="adn"`, com o ADN (T-026).
+
+    Use com `with`, para fechar a conexão.
+    """
 
     def __init__(
         self,
         config: Config,
         cert: Certificado,
         *,
+        api: str = "sefin",
         transporte: httpx.BaseTransport | None = None,
     ) -> None:
-        _conferir_destino(config)
-        self.sefin_url = config.sefin_url
+        self.api = api
+        self.base_url = _conferir_destino(config, api)
         # `transporte` existe para os testes, que simulam o servidor sem rede.
         self._http = httpx.Client(
-            base_url=self.sefin_url + "/",
+            base_url=self.base_url + "/",
             verify=contexto_tls(cert),
             timeout=TEMPO_LIMITE,
             transport=transporte,
             trust_env=False,
         )
 
+    @property
+    def sefin_url(self) -> str:
+        """URL base em uso; o nome vem da T-015, quando só havia a SEFIN."""
+        return self.base_url
+
     def __repr__(self) -> str:
-        return f"ClienteNfse(sefin_url={self.sefin_url!r})"
+        return f"ClienteNfse({APIS[self.api][0]}={self.base_url!r})"
 
     def __enter__(self) -> ClienteNfse:
         return self
@@ -200,6 +234,39 @@ class ClienteNfse:
                 raise _rejeicao(resposta)
             raise RespostaInesperada(
                 resposta.status, f"HTTP {resposta.status} não previsto na consulta"
+            )
+
+    def convenio(self, municipio: str) -> ConsultaParametros:
+        """`GET /parametrizacao/{municipio}/convenio` no ADN (T-026)."""
+        self._conferir_parametros(municipio)
+        return self._parametros(f"{municipio}/convenio")
+
+    def historico_aliquotas(self, municipio: str, codigo_servico: str) -> ConsultaParametros:
+        """`GET /parametrizacao/{municipio}/{codigo}/historicoaliquotas` no ADN (T-026).
+
+        A especificação não diz o formato de `codigoServico`. A API real recusou 6 dígitos e
+        recusou 9 dígitos com zero à esquerda (DEC-041): aceita 9 dígitos ou o formato
+        pontuado `NN.NN.NN.NNN`, e quem chama escolhe.
+        """
+        self._conferir_parametros(municipio)
+        if not _CODIGO_SERVICO.fullmatch(codigo_servico):
+            raise ValueError("código de serviço fora do formato: 9 dígitos ou NN.NN.NN.NNN")
+        return self._parametros(f"{municipio}/{codigo_servico}/historicoaliquotas")
+
+    def _conferir_parametros(self, municipio: str) -> None:
+        if self.api != "adn":
+            raise ValueError("parâmetros municipais ficam no ADN: crie o cliente com api='adn'")
+        if not _MUNICIPIO.fullmatch(municipio):
+            raise ValueError("código do município fora do formato: 7 dígitos (IBGE)")
+
+    def _parametros(self, caminho: str) -> ConsultaParametros:
+        resposta = self._pedir("GET", f"{_PARAMETRIZACAO}/{caminho}")
+        with _anexar_corpo(resposta):
+            # 400 e 404 também trazem corpo com `mensagem` (especificação do ADN).
+            if resposta.status in (200, 400, 404):
+                return ConsultaParametros(resposta.status, _objeto_json(resposta), resposta.corpo)
+            raise RespostaInesperada(
+                resposta.status, f"HTTP {resposta.status} não previsto na consulta de parâmetros"
             )
 
     def _pedir(self, metodo: str, caminho: str, *, corpo_json: dict | None = None) -> Resposta:

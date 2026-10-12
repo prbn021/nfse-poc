@@ -110,6 +110,26 @@ Para testar a conexão mTLS com a SEFIN Nacional em produção restrita, com o c
 
 O script não emite nada. Ele baixa a página de documentação da API e a especificação que ela aponta (as duas vão para `out\`) e consulta, com `HEAD /dps/{id}`, um Id de DPS que não existe; a resposta esperada é `404`. Mostra só a URL, os códigos HTTP e as rotas da especificação. Código de saída: `0` todas as consultas tiveram resposta HTTP, `1` emitente, certificado ou URL recusados (só `https://*.producaorestrita.nfse.gov.br` é aceita), `3` erro de rede ou de TLS. Usa a rede e o certificado real: é manual, fora dos testes.
 
+Com `--api parametrizacao`, o mesmo script baixa a página de documentação e a especificação da API de parametrização municipal, que fica no ADN (`NFSE_ADN_URL`), para `out\adn-parametrizacao-docs-index.html` e `out\adn-parametrizacao-openapi.json`, e mostra as rotas. Não consulta DPS:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\testar_conexao.py --emitente minha-empresa --api parametrizacao
+```
+
+Para consultar no ADN se um município está parametrizado e administra um código de serviço (a causa do E0312):
+
+```powershell
+.\.venv\Scripts\python.exe scripts\consultar_parametros.py --emitente minha-empresa --c-trib-nac 123456
+```
+
+Só consultas, em produção restrita. Mostra o convênio do município (o do emitente, ou o de `--municipio`) e o histórico de alíquotas do código com o desdobramento `000`, em 9 dígitos e no formato pontuado (`04.12.01.000`), e grava as respostas em `out\adn-<município>-…json`. Os campos aparecem como a API os devolve; a especificação não descreve os valores 0, 1 e -1.
+
+Com `--varrer` no lugar de `--c-trib-nac`, o script consulta o histórico de alíquotas de todos os códigos da lista nacional de serviços (Anexo B, cerca de 340, um por vez) e mostra os que o município tem; o status de cada código vai para `out\adn-<município>-varredura.json`:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\consultar_parametros.py --emitente minha-empresa --varrer
+```
+
 Para assinar a DPS de exemplo com o certificado de um emitente e empacotá-la em GZip+Base64:
 
 ```powershell

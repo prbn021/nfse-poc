@@ -152,3 +152,147 @@ def test_emitente_e_obrigatorio(capsys):
         testar_conexao.main([])
     assert saida.value.code == 2
     assert "--emitente" in capsys.readouterr().err
+
+
+# --- parametrização municipal no ADN (T-026) ----------------------------------------------
+
+ADN = "https://adn.producaorestrita.nfse.gov.br"
+PAGINA_ADN = b"initTry({\n    openApi: '/parametrizacao/docs/v1/swagger.json',\n})"
+OPENAPI_ADN = {
+    "swagger": "2.0",
+    "host": "adn.producaorestrita.nfse.gov.br",
+    "basePath": "/parametrizacao",
+    "paths": {"/parametros_municipais/{codigoMunicipio}/convenio": {}},
+}
+
+
+def servidor_adn(pedidos: list, *, pagina=PAGINA_ADN):
+    def responder(pedido: httpx.Request) -> httpx.Response:
+        pedidos.append((pedido.method, str(pedido.url)))
+        caminho = pedido.url.path
+        if caminho == "/parametrizacao/docs/index.html":
+            return httpx.Response(200, headers={"content-type": "text/html"}, content=pagina)
+        if caminho == "/parametrizacao/docs/v1/swagger.json":
+            return httpx.Response(200, json=OPENAPI_ADN)
+        return httpx.Response(404)
+
+    return httpx.MockTransport(responder)
+
+
+def rodar_adn(tmp_path, transporte, *, cfg=None):
+    pasta = tmp_path / "emitentes"
+    pasta.mkdir(exist_ok=True)
+    emitente(pasta)
+    return testar_conexao.main(
+        ["--emitente", "acme", "--api", "parametrizacao"],
+        pasta=pasta,
+        config=cfg or config(),
+        transporte=transporte,
+        saida=tmp_path / "out",
+    )
+
+
+def test_parametrizacao_baixa_documentacao_e_especificacao_do_adn(tmp_path, capsys):
+    pedidos = []
+    assert rodar_adn(tmp_path, servidor_adn(pedidos)) == 0
+    # Só a documentação: nada de consulta de DPS no ADN.
+    assert pedidos == [
+        ("GET", f"{ADN}/parametrizacao/docs/index.html"),
+        ("GET", f"{ADN}/parametrizacao/docs/v1/swagger.json"),
+    ]
+    saida = capsys.readouterr()
+    assert saida.err == ""
+    linhas = saida.out.splitlines()
+    assert linhas[0] == f"ADN: {ADN}"
+    assert "host: adn.producaorestrita.nfse.gov.br, basePath: /parametrizacao" in linhas
+    assert "rotas: /parametros_municipais/{codigoMunicipio}/convenio" in linhas
+    saida_dir = tmp_path / "out"
+    assert (saida_dir / "adn-parametrizacao-docs-index.html").read_bytes() == PAGINA_ADN
+    assert json.loads((saida_dir / "adn-parametrizacao-openapi.json").read_text()) == OPENAPI_ADN
+
+
+# Formato da página real (observado em 2026-10-12): o link fica num index.js local.
+PAGINA_ADN_REAL = (
+    b'<html><head><link href="index.css" rel="stylesheet"></head><body>'
+    b'<div id="redoc-container"></div>'
+    b'<script src="redoc.standalone.js"></script><script src="index.js"></script></body></html>'
+)
+INDEX_JS = b"Redoc.init('/parametrizacao/docs/v1/swagger.json', {}, document.getElementById('x'))"
+
+
+def servidor_adn_real(pedidos: list, *, index_js=INDEX_JS):
+    def responder(pedido: httpx.Request) -> httpx.Response:
+        pedidos.append((pedido.method, str(pedido.url)))
+        caminho = pedido.url.path
+        if caminho == "/parametrizacao/docs/index.html":
+            return httpx.Response(
+                200, headers={"content-type": "text/html"}, content=PAGINA_ADN_REAL
+            )
+        if caminho == "/parametrizacao/docs/index.js":
+            return httpx.Response(
+                200, headers={"content-type": "text/javascript"}, content=index_js
+            )
+        if caminho == "/parametrizacao/docs/v1/swagger.json":
+            return httpx.Response(200, json=OPENAPI_ADN)
+        return httpx.Response(404)
+
+    return httpx.MockTransport(responder)
+
+
+def test_parametrizacao_acha_o_link_no_script_da_pagina(tmp_path, capsys):
+    pedidos = []
+    assert rodar_adn(tmp_path, servidor_adn_real(pedidos)) == 0
+    # O redoc.standalone.js é a biblioteca: não é baixado.
+    assert pedidos == [
+        ("GET", f"{ADN}/parametrizacao/docs/index.html"),
+        ("GET", f"{ADN}/parametrizacao/docs/index.js"),
+        ("GET", f"{ADN}/parametrizacao/docs/v1/swagger.json"),
+    ]
+    out = capsys.readouterr().out
+    assert "rotas: /parametros_municipais/{codigoMunicipio}/convenio" in out
+    saida_dir = tmp_path / "out"
+    assert (saida_dir / "adn-parametrizacao-index.js").read_bytes() == INDEX_JS
+    assert json.loads((saida_dir / "adn-parametrizacao-openapi.json").read_text()) == OPENAPI_ADN
+
+
+def test_script_sem_link_avisa_e_nao_segue(tmp_path, capsys):
+    pedidos = []
+    assert rodar_adn(tmp_path, servidor_adn_real(pedidos, index_js=b"// nada aqui")) == 0
+    assert len(pedidos) == 2
+    assert "OpenAPI: link não encontrado na página nem em index.js" in capsys.readouterr().out
+
+
+def test_script_fora_da_url_base_nao_e_baixado(tmp_path, capsys):
+    pagina = b'<script src="https://exemplo.invalid/index.js"></script>'
+    pedidos = []
+    assert rodar_adn(tmp_path, servidor_adn(pedidos, pagina=pagina)) == 0
+    assert len(pedidos) == 1
+    assert "OpenAPI: link não encontrado na página" in capsys.readouterr().out
+
+
+def test_parametrizacao_nao_segue_link_fora_da_api(tmp_path, capsys):
+    pedidos = []
+    pagina = b"openApi: 'https://exemplo.invalid/swagger.json'"
+    assert rodar_adn(tmp_path, servidor_adn(pedidos, pagina=pagina)) == 0
+    assert len(pedidos) == 1
+    assert "OpenAPI: link fora da URL base, não seguido" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "adn_url",
+    ["https://adn.nfse.gov.br", "http://adn.producaorestrita.nfse.gov.br", ""],
+)
+def test_adn_fora_da_producao_restrita_e_recusado(tmp_path, capsys, adn_url):
+    pedidos = []
+    cfg = Config("homologacao", BASE, adn_url, Path("x"))
+    assert rodar_adn(tmp_path, servidor_adn(pedidos), cfg=cfg) == 1
+    assert pedidos == []
+    err = capsys.readouterr().err
+    assert "INV-02" in err
+    assert "NFSE_ADN_URL" in err
+
+
+def test_api_desconhecida_e_recusada(capsys):
+    with pytest.raises(SystemExit) as saida:
+        testar_conexao.main(["--emitente", "acme", "--api", "outra"])
+    assert saida.value.code == 2
