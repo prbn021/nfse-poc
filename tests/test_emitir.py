@@ -182,6 +182,23 @@ def test_codigo_de_tributacao_invalido_nao_envia(emitentes, tmp_path, capsys, co
     assert "c_trib_nac" in capsys.readouterr().err
 
 
+def test_codigo_municipal_vem_do_argumento(emitentes, tmp_path):
+    # O município parametriza o serviço com desdobramento próprio, o cTribMun (DEC-043).
+    servidor = Servidor()
+    assert rodar(emitentes, tmp_path, servidor, "--c-trib-mun", "009") == 0
+    inf = etree.fromstring(servidor.dps_recebida).find("n:infDPS", N)
+    assert inf.findtext("n:serv/n:cServ/n:cTribMun", namespaces=N) == "009"
+    assert inf.findtext("n:serv/n:cServ/n:cTribNac", namespaces=N) == "990101"
+
+
+@pytest.mark.parametrize("codigo", ["1", "0001", "abc"])
+def test_codigo_municipal_invalido_nao_envia(emitentes, tmp_path, capsys, codigo):
+    servidor = Servidor()
+    assert rodar(emitentes, tmp_path, servidor, "--c-trib-mun", codigo) == 1
+    assert servidor.pedidos == []
+    assert "c_trib_mun" in capsys.readouterr().err
+
+
 def test_rejeicao_mostra_os_codigos_e_nao_salva_nfse(emitentes, tmp_path, capsys):
     resposta = httpx.Response(
         400,

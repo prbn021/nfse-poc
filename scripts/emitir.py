@@ -1,8 +1,8 @@
 """Emite em produção restrita a DPS de exemplo do emitente indicado e salva a NFS-e (T-007).
 
 Script manual: usa a rede e o certificado real do emitente. Monta a DPS de exemplo de
-gerar_dps.py sem `cTribMun` (o fictício não existe no município, E0314), com o número
-pedido e o código de tributação nacional do serviço do emitente (obrigatório, E0312);
+gerar_dps.py com o número pedido, o código de tributação nacional do serviço do emitente
+(obrigatório, E0312) e, se dado, o municipal (`cTribMun`, E0314; sem ele, a DPS vai sem);
 valida contra o XSD, assina, confere a assinatura e envia uma vez (src/emissao.py).
 Salva em out/ a DPS enviada e a NFS-e devolvida. Só produção restrita (INV-02).
 Não mostra senha, chave nem conteúdo do certificado (INV-05).
@@ -79,6 +79,11 @@ def main(
         "pelo município de incidência (E0312)",
     )
     parser.add_argument(
+        "--c-trib-mun",
+        help="código de tributação municipal, 3 dígitos: o desdobramento com que o município "
+        "parametriza o serviço (veja consultar_parametros.py --desdobramento); padrão: nenhum",
+    )
+    parser.add_argument(
         "--p-tot-trib-sn",
         default=str(P_TOT_TRIB_SN_FICTICIO),
         help="%% aproximado dos tributos do Simples na competência (padrão: %(default)s, fictício)",
@@ -96,7 +101,7 @@ def main(
             n_dps=args.n_dps,
             servico=dataclasses.replace(
                 exemplo.servico,
-                c_trib_mun=None,
+                c_trib_mun=args.c_trib_mun,
                 c_trib_nac=args.c_trib_nac,
             ),
         )
