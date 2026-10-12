@@ -202,6 +202,38 @@ def test_codigo_municipal_invalido_nao_envia(emitentes, tmp_path, capsys, codigo
     assert "c_trib_mun" in capsys.readouterr().err
 
 
+def test_obra_vem_do_argumento(emitentes, tmp_path):
+    # T-020: CNO fictício; o código é de obra (E0370).
+    servidor = Servidor()
+    assert (
+        rodar(emitentes, tmp_path, servidor, "--obra-cno", "900000000001", c_trib_nac="070202") == 0
+    )
+    inf = etree.fromstring(servidor.dps_recebida).find("n:infDPS", N)
+    assert inf.findtext("n:serv/n:obra/n:cObra", namespaces=N) == "900000000001"
+
+
+def test_sem_obra_a_dps_vai_sem_o_grupo(emitentes, tmp_path):
+    servidor = Servidor()
+    assert rodar(emitentes, tmp_path, servidor) == 0
+    assert etree.fromstring(servidor.dps_recebida).find(".//n:obra", N) is None
+
+
+def test_codigo_de_obra_sem_cno_nao_envia(emitentes, tmp_path, capsys):
+    servidor = Servidor()
+    assert rodar(emitentes, tmp_path, servidor, c_trib_nac="070202") == 1
+    assert servidor.pedidos == []
+    assert "E0370" in capsys.readouterr().err
+
+
+def test_cno_com_codigo_que_nao_e_de_obra_nao_envia(emitentes, tmp_path, capsys):
+    servidor = Servidor()
+    assert (
+        rodar(emitentes, tmp_path, servidor, "--obra-cno", "900000000001", c_trib_nac="010101") == 1
+    )
+    assert servidor.pedidos == []
+    assert "E0372" in capsys.readouterr().err
+
+
 def test_rejeicao_mostra_os_codigos_e_nao_salva_nfse(emitentes, tmp_path, capsys):
     resposta = httpx.Response(
         400,

@@ -2,6 +2,7 @@
 
 Os dados do prestador vêm do emitente escolhido com --emitente (padrão: o exemplo fictício).
 O percentual de pTotTribSN da competência vem de --p-tot-trib-sn (padrão fictício, Q-18).
+Para um serviço de obra: --c-trib-nac com um código de obra e --obra-cno (T-020).
 """
 
 import argparse
@@ -15,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import carregar_config
 from src.dps import (
     Dps,
+    Obra,
     PisCofins,
     Prestador,
     Servico,
@@ -29,13 +31,21 @@ from src.xsd import preparar_copia_local
 
 BRT = timezone(timedelta(hours=-3))
 P_TOT_TRIB_SN_FICTICIO = Decimal("6.00")
+C_TRIB_NAC_FICTICIO = "010101"
 
 
 def dps_exemplo(
-    tp_amb: int, emitente: Emitente, p_tot_trib_sn: Decimal = P_TOT_TRIB_SN_FICTICIO
+    tp_amb: int,
+    emitente: Emitente,
+    p_tot_trib_sn: Decimal = P_TOT_TRIB_SN_FICTICIO,
+    *,
+    c_trib_nac: str = C_TRIB_NAC_FICTICIO,
+    obra_cno: str | None = None,
 ) -> Dps:
     # Tomador, serviço e valores são FICTÍCIOS; o prestador é o emitente recebido.
     # Perfil mais comum da carteira: ME/EPP pelo Simples, tomador pessoa física (DEC-013).
+    # Com obra_cno, o serviço leva o grupo de obra com o CNO dado (T-020); o código de
+    # tributação precisa ser de obra (E0370, E0372).
     return Dps(
         tp_amb=tp_amb,
         c_loc_emi=emitente.municipio,
@@ -55,9 +65,10 @@ def dps_exemplo(
         tomador=Tomador(nome="Cliente de Teste", cpf="12345678909"),
         servico=Servico(
             c_loc_prestacao="3304557",
-            c_trib_nac="010101",
+            c_trib_nac=c_trib_nac,
             c_trib_mun="001",
             descricao="Desenvolvimento de software sob encomenda",
+            obra=None if obra_cno is None else Obra(c_obra=obra_cno),
         ),
         valores=Valores(
             v_serv=Decimal("100.00"),
@@ -89,6 +100,16 @@ def main(argv: list[str] | None = None) -> int:
         default=str(P_TOT_TRIB_SN_FICTICIO),
         help="%% aproximado dos tributos do Simples na competência (padrão: %(default)s, fictício)",
     )
+    parser.add_argument(
+        "--c-trib-nac",
+        default=C_TRIB_NAC_FICTICIO,
+        help="código de tributação nacional, 6 dígitos (padrão: %(default)s, fictício)",
+    )
+    parser.add_argument(
+        "--obra-cno",
+        help="número da obra no CNO (ou CEI): põe o grupo de obra, exigido pelos códigos de "
+        "obra (E0370); padrão: nenhum",
+    )
     args = parser.parse_args(argv)
     try:
         emitente = carregar_emitente(args.emitente)
@@ -97,7 +118,13 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = carregar_config()
     try:
-        dps = dps_exemplo(cfg.tp_amb, emitente, _decimal(args.p_tot_trib_sn))
+        dps = dps_exemplo(
+            cfg.tp_amb,
+            emitente,
+            _decimal(args.p_tot_trib_sn),
+            c_trib_nac=args.c_trib_nac,
+            obra_cno=args.obra_cno,
+        )
     except ValueError as erro:
         parser.error(str(erro))
     xml = para_xml(dps)
