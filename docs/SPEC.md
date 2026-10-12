@@ -14,10 +14,11 @@ Approved: 2026-10-07
 (Aprovação dada pelo humano na conversa de 2026-10-07 e transcrita aqui pelo agente. A aprovação cobre o spec; os invariants candidatos de §4 estavam pendentes em Q-01 e foram aprovados depois, ver DEC-004.)
 
 - Quem aprova: Paulo Reis (único autor em `git log`) aprova o spec, os invariants e os phase gates, e decide quando uma task está `done`.
-- Regras específicas do projeto, além do `CLAUDE.md`: os invariants de §4 e as três abaixo.
+- Regras específicas do projeto, além do `CLAUDE.md`: os invariants de §4 e as quatro abaixo.
 - `Approved` e `done` (DEC-007): o agente só escreve essas marcas quando o humano pedir explicitamente na conversa, e anota a data e que foi transcrição. O agente nunca deduz uma aprovação.
 - Idioma (DEC-006): em inglês os termos do `CLAUDE.md` (gate, invariant, milestone, task, frozen, boundary, claim, acceptance criteria, open question), os títulos de seção e de coluna deste spec, as mensagens de commit, os títulos e textos de PR e os nomes de branch. Em português o texto corrido de `docs/`, o código e os comentários.
 - PR e merge (DEC-008): uma PR por task, mesclada com squash pelo humano; cada branch parte de `main` atualizado. O agente não mescla.
+- PRs empilhadas depois de um squash (DEC-046): quando a PR de baixo entra em `main` com squash, a branch de cima recebe um merge de `main` (nunca rebase nem force-push, porque já está publicada). Antes de resolver os conflitos, o agente confere que o diff entre a ponta da branch de baixo e `main` é vazio; se for, resolve cada conflito com a versão da branch de cima (`git checkout --ours`), confere que o resultado é idêntico à branch de cima de antes e que, contra `main`, sobram só os arquivos da task de cima, e roda os gates. Se o diff não for vazio, `main` trouxe algo novo, e os conflitos são resolvidos um a um. Depois, a base da PR de cima passa a ser `main`.
 
 ## §1 Goals and non-goals
 
@@ -819,6 +820,12 @@ Context: com a DEC-044, a segunda NFS-e autorizada em produção restrita mostro
 Decision: do agente, por ser uma API que não se comporta como a especificação supunha: o cliente aceita em `idDps` o Id da DPS ou "NFS" + a chave devolvida no mesmo corpo; no segundo caso, `NfseEmitida.id_dps` fica None, e `src/emissao.py` só compara Ids quando a resposta traz o da DPS. Qualquer outro valor continua sendo resposta inesperada. A garantia de que a nota é da DPS enviada fica com a conferência (`src/nfse.py`), que compara o Id da DPS embutida e o Id da nota com a chave.
 Alternatives: ignorar `idDps` de vez (rejeitado: um valor que não é nem da DPS nem da nota indica resposta errada, e merece parar).
 Consequences: §3. Comprovado em 2026-10-12: a terceira NFS-e autorizada teve o 201 lido direto, sem recuperação.
+
+### DEC-046: Atualizar a branch empilhada depois do squash da de baixo (2026-10-12, T-026)
+Context: a PR da T-007 entrou em `main` com squash (`8687222`). A branch da T-026, empilhada na da T-007 e já publicada, passou a ter conflitos com `main` em `docs/SPEC.md`, `docs/SOURCES.md` e `src/client.py`, porque o git não reconhece o commit squashado como os commits originais que ela já continha.
+Decision: do humano, na conversa de 2026-10-12, a partir da proposta do agente: registrar em §0 o procedimento seguido nesta vez (merge de `main` na branch de cima; conferir que o diff entre a branch de baixo e `main` é vazio; resolver com a versão da branch de cima; conferir o resultado e rodar os gates; trocar a base da PR para `main`). Aplicado na T-026 no commit `ddcc0b4`.
+Alternatives: rebase da branch de cima sobre `main` (rejeitado: reescreve uma branch publicada e exige force-push, que o `CLAUDE.md` proíbe para branch em revisão); deixar de empilhar (rejeitado: o `CLAUDE.md` pede que PRs do mesmo milestone se empilhem).
+Consequences: §0. A T-024 (formato da descrição de PR em §0) pode juntar esta regra às dela.
 
 ## §11 Open questions
 
