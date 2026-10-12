@@ -220,31 +220,36 @@ class ClienteNfse:
 
 
 def _objeto_json(resposta: Resposta) -> dict:
+    """O corpo como dicionário com as chaves em minúsculas.
+
+    A especificação usa camelCase, mas a SEFIN real respondeu em PascalCase (DEC-037,
+    DEC-039): os campos são lidos sem distinguir maiúsculas.
+    """
     try:
         corpo = json.loads(resposta.corpo)
     except ValueError:
         raise RespostaInesperada(resposta.status, "corpo não é JSON") from None
     if not isinstance(corpo, dict):
         raise RespostaInesperada(resposta.status, "corpo não é um objeto JSON")
-    return corpo
+    return {chave.lower(): valor for chave, valor in corpo.items() if isinstance(chave, str)}
 
 
 def _chave(status: int, corpo: dict) -> str:
-    chave = corpo.get("chaveAcesso")
+    chave = corpo.get("chaveacesso")
     if not isinstance(chave, str) or not _CHAVE.fullmatch(chave):
         raise RespostaInesperada(status, "chaveAcesso ausente ou fora do formato de 50 dígitos")
     return chave
 
 
 def _id_dps(status: int, corpo: dict) -> str:
-    id_dps = corpo.get("idDps")
+    id_dps = corpo.get("iddps")
     if not isinstance(id_dps, str) or not _ID_DPS.fullmatch(id_dps):
         raise RespostaInesperada(status, "idDps ausente ou fora do formato")
     return id_dps
 
 
 def _nfse_xml(status: int, corpo: dict) -> bytes:
-    texto = corpo.get("nfseXmlGZipB64")
+    texto = corpo.get("nfsexmlgzipb64")
     if not isinstance(texto, str):
         raise RespostaInesperada(status, "nfseXmlGZipB64 ausente")
     try:
@@ -305,5 +310,5 @@ def _rejeicao(resposta: Resposta) -> RejeicaoApi:
         mensagens = _mensagens(resposta.status, corpo["erros"], "erros")
     else:
         mensagens = _mensagens(resposta.status, [corpo["erro"]] if "erro" in corpo else [], "erro")
-    id_dps = corpo.get("idDPS")
+    id_dps = corpo.get("iddps")
     return RejeicaoApi(resposta.status, id_dps if isinstance(id_dps, str) else None, mensagens)

@@ -50,8 +50,9 @@ def emitentes(tmp_path):
 class Servidor:
     """SEFIN simulada: responde `GET /dps/{id}` e `POST /nfse` conforme configurado."""
 
-    def __init__(self, *, ja_emitida=False, post=None, depois_da_queda=None):
+    def __init__(self, *, ja_emitida=False, post=None, depois_da_queda=None, pascal=False):
         self.ja_emitida = ja_emitida
+        self.pascal = pascal  # sucesso com as chaves em PascalCase, como os erros reais
         self.post = post  # None: aceita; httpx.Response: devolve; Exception: levanta
         self.depois_da_queda = depois_da_queda
         self.pedidos = []
@@ -91,7 +92,10 @@ class Servidor:
             if self.post is not None:
                 return self.post
             id_dps = etree.fromstring(self.dps_recebida).find("n:infDPS", N).get("Id")
-            return httpx.Response(201, json=self._sucesso(id_dps))
+            corpo = self._sucesso(id_dps)
+            if self.pascal:
+                corpo = {chave[0].upper() + chave[1:]: valor for chave, valor in corpo.items()}
+            return httpx.Response(201, json=corpo)
         return httpx.Response(404)
 
 
@@ -123,6 +127,14 @@ def test_emissao_aceita_salva_a_nfse_e_mostra_a_chave(emitentes, tmp_path, capsy
     assert (saida / f"NFSe{CHAVE}.xml").read_bytes() == servidor.nfse_devolvida
     [enviada] = saida.glob("DPS*-enviada.xml")
     assert enviada.read_bytes() == servidor.dps_recebida
+
+
+def test_sucesso_em_pascalcase_tambem_e_lido(emitentes, tmp_path, capsys):
+    servidor = Servidor(pascal=True)
+    assert rodar(emitentes, tmp_path, servidor) == 0
+    assert [m for m, _ in servidor.pedidos] == ["GET", "POST"]
+    assert f"Chave de acesso: {CHAVE}" in capsys.readouterr().out
+    assert (tmp_path / "out" / f"NFSe{CHAVE}.xml").read_bytes() == servidor.nfse_devolvida
 
 
 def test_dps_enviada_tem_o_numero_pedido_sem_ctribmun_e_assinada(emitentes, tmp_path):

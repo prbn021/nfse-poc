@@ -145,6 +145,58 @@ def test_queda_na_consulta_inicial_nao_envia(dps_assinada, xsd):
     assert _nomes(dubl) == ["chave_da_dps"]
 
 
+@pytest.mark.parametrize(
+    "falha",
+    [
+        RespostaInesperada(201, "chaveAcesso ausente"),
+        RespostaInesperada(502, "HTTP 502 não previsto no envio"),
+        RejeicaoApi(500, ID_DPS, (MensagemApi("E9999", "falha interna"),)),
+    ],
+    ids=["201-ilegivel", "502", "500"],
+)
+def test_resposta_que_pode_esconder_nota_gerada_recupera_a_nota(dps_assinada, nfse, xsd, falha):
+    # A nota pode ter sido gerada mesmo com a resposta ilegível ou com erro interno: consulta.
+    dubl = Dubl(chaves=[None, CHAVE], envio=falha, nfse=nfse)
+    resultado = emitir(dubl, dps_assinada, xsd)
+    assert _nomes(dubl) == ["chave_da_dps", "emitir", "chave_da_dps", "obter_nfse"]
+    assert resultado.recuperada is True
+    assert resultado.nfse.chave == CHAVE
+
+
+@pytest.mark.parametrize(
+    "falha",
+    [
+        RespostaInesperada(201, "chaveAcesso ausente"),
+        RejeicaoApi(500, ID_DPS, (MensagemApi("E9999", "falha interna"),)),
+    ],
+    ids=["201-ilegivel", "500"],
+)
+def test_sem_nota_gerada_o_erro_original_passa_adiante(dps_assinada, xsd, falha):
+    dubl = Dubl(chaves=[None, None], envio=falha)
+    with pytest.raises(type(falha)) as erro:
+        emitir(dubl, dps_assinada, xsd)
+    assert erro.value is falha
+    assert _nomes(dubl) == ["chave_da_dps", "emitir", "chave_da_dps"]
+
+
+def test_resposta_ilegivel_e_consulta_que_falha_e_envio_incerto(dps_assinada, xsd):
+    dubl = Dubl(
+        chaves=[None, ErroConexao("ConnectError: simulado")],
+        envio=RespostaInesperada(201, "chaveAcesso ausente"),
+    )
+    with pytest.raises(EnvioIncerto):
+        emitir(dubl, dps_assinada, xsd)
+
+
+def test_rejeicao_400_nao_consulta_de_novo(dps_assinada, xsd):
+    # 400 e 403 são recusas: a nota não foi gerada, não há o que recuperar.
+    for status in (400, 403):
+        dubl = Dubl(envio=RejeicaoApi(status, ID_DPS, (MensagemApi("E0312", "x"),)))
+        with pytest.raises(RejeicaoApi):
+            emitir(dubl, dps_assinada, xsd)
+        assert _nomes(dubl) == ["chave_da_dps", "emitir"]
+
+
 def test_id_devolvido_diferente_do_enviado(dps_assinada, nfse, xsd):
     dubl = Dubl(envio=_emitida(nfse, id_dps=ID_DPS[:-1] + "3"))
     with pytest.raises(RespostaInesperada, match="idDps"):

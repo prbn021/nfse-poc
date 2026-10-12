@@ -375,6 +375,48 @@ def test_mensagens_fora_do_formato_sao_lidas_com_tolerancia(cert, item, esperada
     assert erro.value.mensagens == (esperada,)
 
 
+def test_emitir_aceita_campos_com_outra_capitalizacao(cert):
+    # A resposta de erro real veio em PascalCase (DEC-037); a de sucesso pode vir também.
+    corpo = {
+        "TipoAmbiente": 2,
+        "IdDps": ID_DPS,
+        "ChaveAcesso": CHAVE,
+        "NfseXmlGZipB64": codificar(NFSE_XML),
+        "Alertas": [{"Codigo": "A1", "Descricao": "alerta fictício"}],
+    }
+    with ClienteNfse(config(), cert, transporte=transporte(json_resposta(201, corpo))) as c:
+        emitida = c.emitir(b"<DPS/>")
+    assert (emitida.chave, emitida.id_dps, emitida.xml) == (CHAVE, ID_DPS, NFSE_XML)
+    assert emitida.alertas == (MensagemApi("A1", "alerta fictício"),)
+
+
+def test_consultas_aceitam_campos_com_outra_capitalizacao(cert):
+    resposta = json_resposta(200, {"ChaveAcesso": CHAVE, "IdDps": ID_DPS})
+    with ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente:
+        assert cliente.chave_da_dps(ID_DPS) == CHAVE
+    resposta = json_resposta(200, {"ChaveAcesso": CHAVE, "NFSEXMLGZIPB64": codificar(NFSE_XML)})
+    with ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente:
+        assert cliente.obter_nfse(CHAVE) == NFSE_XML
+
+
+@pytest.mark.parametrize(
+    "corpo",
+    [
+        {"IdDPS": ID_DPS, "Erros": [{"Codigo": "E1", "Descricao": "x"}]},
+        {"idDps": ID_DPS, "ERROS": [{"Codigo": "E1", "Descricao": "x"}]},
+        {"IdDPS": ID_DPS, "Erro": {"Codigo": "E1", "Descricao": "x"}},
+    ],
+)
+def test_rejeicao_com_campos_em_outra_capitalizacao(cert, corpo):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(json_resposta(400, corpo))) as c,
+        pytest.raises(RejeicaoApi) as erro,
+    ):
+        c.emitir(b"<DPS/>")
+    assert erro.value.id_dps == ID_DPS
+    assert erro.value.mensagens == (MensagemApi("E1", "x"),)
+
+
 def test_rejeicao_guarda_o_corpo_bruto_fora_da_mensagem(cert):
     resposta = json_resposta(400, {"erros": [{"codigo": "E1", "descricao": "x"}], "extra": "Z9"})
     with (

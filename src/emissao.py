@@ -5,8 +5,9 @@ tentativa tiver sido processada sem resposta, deixa a dúvida sobre a nota. Por 
 
 - antes de enviar, consulta `GET /dps/{id}`; se já existe NFS-e para o Id, não envia;
 - envia uma vez só, sem retry automático;
-- se a conexão cair, consulta de novo: se a nota existe, baixa; se não, diz que pode reenviar;
-  se nem a consulta responde, o envio fica incerto e quem decide é a pessoa.
+- se a conexão cair, a resposta vier ilegível ou com erro interno (5xx), consulta de novo: se
+  a nota existe, baixa; se não, passa o erro adiante (na queda, dizendo que pode reenviar);
+  se nem a consulta responde, o envio fica incerto e quem decide é a pessoa (DEC-039).
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from lxml import etree
 
 from src.client import ErroConexao
 from src.dps import NS
-from src.erros import RespostaInesperada
+from src.erros import RejeicaoApi, RespostaInesperada
 from src.nfse import NfseEmitida, conferir_nfse
 
 _DS = "http://www.w3.org/2000/09/xmldsig#"
@@ -83,12 +84,18 @@ def emitir(cliente: Cliente, dps_assinada: bytes, xsd_nfse: Path) -> Resultado:
         raise DpsJaEmitida(id_dps, chave)
 
     recuperada = False
+    falha = None
     try:
         nfse = cliente.emitir(dps_assinada)
-    except ErroConexao as erro:
-        queda = str(erro)
-        nfse = None
-    if nfse is None:
+    except (ErroConexao, RespostaInesperada) as erro:
+        falha = erro
+    except RejeicaoApi as erro:
+        # 400 e 403 são recusas; 500 é falha de processamento, que pode ter gerado a nota.
+        if erro.status < 500:
+            raise
+        falha = erro
+    if falha is not None:
+        # A nota pode existir: a resposta não chegou, veio ilegível ou com erro interno.
         try:
             chave = cliente.chave_da_dps(id_dps)
         except ErroConexao:
@@ -99,10 +106,12 @@ def emitir(cliente: Cliente, dps_assinada: bytes, xsd_nfse: Path) -> Resultado:
         if incerto:
             raise EnvioIncerto(id_dps)
         if chave is None:
-            raise ErroConexao(
-                f"{queda}; a consulta seguinte mostrou que nenhuma NFS-e foi gerada: a DPS pode "
-                "ser enviada de novo"
-            )
+            if isinstance(falha, ErroConexao):
+                raise ErroConexao(
+                    f"{falha}; a consulta seguinte mostrou que nenhuma NFS-e foi gerada: a DPS "
+                    "pode ser enviada de novo"
+                )
+            raise falha
         nfse = NfseEmitida(chave=chave, id_dps=id_dps, xml=cliente.obter_nfse(chave))
         recuperada = True
 
