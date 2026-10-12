@@ -110,6 +110,14 @@ Para testar a conexão mTLS com a SEFIN Nacional em produção restrita, com o c
 
 O script não emite nada. Ele baixa a página de documentação da API e a especificação que ela aponta (as duas vão para `out\`) e consulta, com `HEAD /dps/{id}`, um Id de DPS que não existe; a resposta esperada é `404`. Mostra só a URL, os códigos HTTP e as rotas da especificação. Código de saída: `0` todas as consultas tiveram resposta HTTP, `1` emitente, certificado ou URL recusados (só `https://*.producaorestrita.nfse.gov.br` é aceita), `3` erro de rede ou de TLS. Usa a rede e o certificado real: é manual, fora dos testes.
 
+Para assinar a DPS de exemplo com o certificado de um emitente e empacotá-la em GZip+Base64:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\assinar_dps.py --emitente minha-empresa
+```
+
+O script monta a mesma DPS de exemplo de `gerar_dps.py`, com o prestador do emitente, assina com o certificado dele, confere a assinatura e valida contra o XSD. Salva em `out\` a DPS assinada (`<Id>-assinada.xml`) e a mesma DPS em GZip+Base64 (`<Id>-assinada.b64`). Código de saída: `0` tudo conferido, `1` emitente, certificado, senha ou assinatura com problema (por exemplo, o CNPJ do certificado não é o do emitente), `2` XSD não encontrado. Não usa rede e não envia nada: mostra que a chave assina e que a assinatura confere localmente, não que a SEFIN a aceita.
+
 ## Testar
 
 ```powershell

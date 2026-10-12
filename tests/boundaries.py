@@ -37,7 +37,9 @@ REDE = frozenset(
     }
 )
 # Módulos que carregam ou usam certificado e chave privada.
-CERTIFICADO = frozenset({"src.certificado", "cryptography", "OpenSSL", "signxml", "xmlsec"})
+CERTIFICADO = frozenset(
+    {"src.certificado", "src.assinatura", "cryptography", "OpenSSL", "signxml", "xmlsec"}
+)
 
 CLIENT = "src.client"
 DPS = "src.dps"
