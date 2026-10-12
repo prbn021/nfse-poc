@@ -80,13 +80,21 @@ def contexto_tls(cert: Certificado) -> ssl.SSLContext:
     return contexto
 
 
-def _conferir_destino(config: Config) -> None:
-    """INV-02: só a produção restrita, por ambiente e por URL."""
+# APIs que o cliente alcança: nome -> (atributo de Config, variável do .env).
+APIS = {"sefin": ("sefin_url", "NFSE_SEFIN_URL"), "adn": ("adn_url", "NFSE_ADN_URL")}
+
+
+def _conferir_destino(config: Config, api: str) -> str:
+    """INV-02: só a produção restrita, por ambiente e por URL. Devolve a URL base da API."""
+    if api not in APIS:
+        raise ValueError(f"api desconhecida: {api!r} (use {', '.join(APIS)})")
     if config.ambiente != "homologacao":
         raise ValueError(
             f"ambiente {config.ambiente!r} recusado: só produção restrita (INV-02, DEC-002)"
         )
-    partes = urlsplit(config.sefin_url)
+    atributo, variavel = APIS[api]
+    url = getattr(config, atributo)
+    partes = urlsplit(url)
     host = partes.hostname or ""
     if (
         partes.scheme != "https"
@@ -96,34 +104,43 @@ def _conferir_destino(config: Config) -> None:
         or partes.fragment
     ):
         raise ValueError(
-            f"NFSE_SEFIN_URL {config.sefin_url!r} recusada: só https://*{SUFIXO_HOST} "
-            "(INV-02, DEC-002)"
+            f"{variavel} {url!r} recusada: só https://*{SUFIXO_HOST} (INV-02, DEC-002)"
         )
+    return url
 
 
 class ClienteNfse:
-    """Conexão mTLS com a SEFIN Nacional. Use com `with`, para fechar a conexão."""
+    """Conexão mTLS com a SEFIN Nacional ou, com `api="adn"`, com o ADN (T-026).
+
+    Use com `with`, para fechar a conexão.
+    """
 
     def __init__(
         self,
         config: Config,
         cert: Certificado,
         *,
+        api: str = "sefin",
         transporte: httpx.BaseTransport | None = None,
     ) -> None:
-        _conferir_destino(config)
-        self.sefin_url = config.sefin_url
+        self.api = api
+        self.base_url = _conferir_destino(config, api)
         # `transporte` existe para os testes, que simulam o servidor sem rede.
         self._http = httpx.Client(
-            base_url=self.sefin_url + "/",
+            base_url=self.base_url + "/",
             verify=contexto_tls(cert),
             timeout=TEMPO_LIMITE,
             transport=transporte,
             trust_env=False,
         )
 
+    @property
+    def sefin_url(self) -> str:
+        """URL base em uso; o nome vem da T-015, quando só havia a SEFIN."""
+        return self.base_url
+
     def __repr__(self) -> str:
-        return f"ClienteNfse(sefin_url={self.sefin_url!r})"
+        return f"ClienteNfse({APIS[self.api][0]}={self.base_url!r})"
 
     def __enter__(self) -> ClienteNfse:
         return self

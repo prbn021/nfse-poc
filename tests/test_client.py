@@ -180,6 +180,33 @@ def test_recusa_url_fora_da_producao_restrita(cert, url):
         ClienteNfse(config(sefin_url=url), cert, transporte=transporte(httpx.Response(200)))
 
 
+def test_cliente_do_adn_usa_a_url_do_adn(cert):
+    pedidos = []
+    with ClienteNfse(
+        config(), cert, api="adn", transporte=transporte(httpx.Response(200), pedidos)
+    ) as cliente:
+        assert cliente.base_url == "https://adn.producaorestrita.nfse.gov.br"
+        cliente.obter("parametrizacao/docs/index.html")
+    assert (
+        pedidos[0].url == "https://adn.producaorestrita.nfse.gov.br/parametrizacao/docs/index.html"
+    )
+
+
+@pytest.mark.parametrize(
+    "adn_url",
+    ["https://adn.nfse.gov.br", "http://adn.producaorestrita.nfse.gov.br", ""],
+)
+def test_cliente_do_adn_recusa_url_fora_da_producao_restrita(cert, adn_url):
+    cfg = Config("homologacao", BASE, adn_url, Path("x"))
+    with pytest.raises(ValueError, match=r"NFSE_ADN_URL .*\(INV-02"):
+        ClienteNfse(cfg, cert, api="adn", transporte=transporte(httpx.Response(200)))
+
+
+def test_api_desconhecida(cert):
+    with pytest.raises(ValueError, match="api"):
+        ClienteNfse(config(), cert, api="outra", transporte=transporte(httpx.Response(200)))
+
+
 def test_aceita_a_url_da_producao_restrita(cert):
     with ClienteNfse(config(), cert, transporte=transporte(httpx.Response(200))) as cliente:
         assert cliente.sefin_url == BASE
