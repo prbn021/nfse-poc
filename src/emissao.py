@@ -118,7 +118,8 @@ def emitir(cliente: Cliente, dps_assinada: bytes, xsd_nfse: Path) -> Resultado:
         nfse = NfseEmitida(chave=chave, id_dps=id_dps, xml=cliente.obter_nfse(chave))
         recuperada = True
 
-    if nfse.id_dps != id_dps:
+    # Sem `id_dps` na resposta (DEC-045), a conferência compara a DPS embutida na nota.
+    if nfse.id_dps is not None and nfse.id_dps != id_dps:
         raise RespostaInesperada(201, "idDps devolvido não é o da DPS enviada")
     problemas = conferir_nfse(nfse.xml, chave=nfse.chave, id_dps=id_dps, xsd=xsd_nfse)
     return Resultado(nfse=nfse, problemas=problemas, recuperada=recuperada, falha=falha)

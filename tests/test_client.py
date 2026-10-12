@@ -387,6 +387,26 @@ def erro_post(*erros, status=400) -> httpx.Response:
     )
 
 
+def test_emitir_aceita_idDps_com_o_id_da_nfse(cert):
+    # A SEFIN real devolve em `idDps` o Id da NFS-e ("NFS" + chave), não o da DPS (DEC-045).
+    resposta = json_resposta(201, sucesso(idDps=f"NFS{CHAVE}"))
+    with ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente:
+        emitida = cliente.emitir(b"<DPS/>")
+    assert emitida.chave == CHAVE
+    assert emitida.id_dps is None
+    assert emitida.xml == NFSE_XML
+
+
+@pytest.mark.parametrize("id_retorno", [f"NFS{'4' * 50}", "NFS123", None, 42])
+def test_emitir_recusa_idDps_que_nao_e_da_dps_nem_da_nota(cert, id_retorno):
+    resposta = json_resposta(201, sucesso(idDps=id_retorno))
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RespostaInesperada, match="idDps"),
+    ):
+        cliente.emitir(b"<DPS/>")
+
+
 def test_emitir_faz_post_com_a_dps_em_gzip_base64(cert):
     pedidos = []
     with ClienteNfse(

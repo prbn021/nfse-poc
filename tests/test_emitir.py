@@ -50,9 +50,12 @@ def emitentes(tmp_path):
 class Servidor:
     """SEFIN simulada: responde `GET /dps/{id}` e `POST /nfse` conforme configurado."""
 
-    def __init__(self, *, ja_emitida=False, post=None, depois_da_queda=None, pascal=False):
+    def __init__(
+        self, *, ja_emitida=False, post=None, depois_da_queda=None, pascal=False, id_da_nfse=False
+    ):
         self.ja_emitida = ja_emitida
         self.pascal = pascal  # sucesso com as chaves em PascalCase, como os erros reais
+        self.id_da_nfse = id_da_nfse  # `idDps` com "NFS" + chave, como o 201 real
         self.post = post  # None: aceita; httpx.Response: devolve; Exception: levanta
         self.depois_da_queda = depois_da_queda
         self.pedidos = []
@@ -70,7 +73,7 @@ class Servidor:
             "tipoAmbiente": 2,
             "versaoAplicativo": "Ficticio_1.0",
             "dataHoraProcessamento": "2026-10-12T10:00:00-03:00",
-            "idDps": id_dps,
+            "idDps": f"NFS{CHAVE}" if self.id_da_nfse else id_dps,
             "chaveAcesso": CHAVE,
             "nfseXmlGZipB64": self._nfse(),
             "alertas": [],
@@ -243,6 +246,16 @@ def test_queda_depois_do_envio_recupera_a_nota(emitentes, tmp_path, capsys):
     assert "recuperada" in out
     assert "a conexão caiu no envio (ReadTimeout: simulado)" in out
     assert (tmp_path / "out" / f"NFSe{CHAVE}.xml").exists()
+
+
+def test_201_real_com_id_da_nfse_e_lido_direto(emitentes, tmp_path, capsys):
+    # Formato da resposta real (2026-10-12): `idDps` traz "NFS" + chave (DEC-045).
+    servidor = Servidor(id_da_nfse=True)
+    assert rodar(emitentes, tmp_path, servidor) == 0
+    assert [m for m, _ in servidor.pedidos] == ["GET", "POST"]
+    out = capsys.readouterr().out
+    assert "recuperada" not in out
+    assert "[OK] NFS-e conferida" in out
 
 
 def test_201_ilegivel_diz_a_causa_e_salva_a_resposta(emitentes, tmp_path, capsys):

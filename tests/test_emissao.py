@@ -165,6 +165,16 @@ def test_resposta_que_pode_esconder_nota_gerada_recupera_a_nota(dps_assinada, nf
     assert resultado.falha is falha
 
 
+def test_retorno_sem_id_da_dps_e_aceito_pela_conferencia(dps_assinada, nfse, xsd):
+    # Quando a SEFIN devolve o Id da NFS-e em `idDps`, o cliente não tem o Id da DPS (DEC-045);
+    # quem confere é a DPS embutida na nota.
+    dubl = Dubl(envio=_emitida(nfse, id_dps=None))
+    resultado = emitir(dubl, dps_assinada, xsd)
+    assert resultado.recuperada is False
+    assert resultado.problemas == []
+    assert _nomes(dubl) == ["chave_da_dps", "emitir"]
+
+
 def test_sem_recuperacao_nao_ha_falha(dps_assinada, nfse, xsd):
     resultado = emitir(Dubl(envio=_emitida(nfse)), dps_assinada, xsd)
     assert resultado.falha is None

@@ -22,7 +22,7 @@ _HOMOLOGACAO = "2"  # tpAmb da produção restrita (INV-02)
 @dataclass(frozen=True)
 class NfseEmitida:
     chave: str  # chave de acesso, 50 dígitos
-    id_dps: str
+    id_dps: str | None  # None quando a SEFIN devolve só o Id da NFS-e (DEC-045)
     xml: bytes = field(repr=False)
     alertas: tuple[MensagemApi, ...] = ()
 
