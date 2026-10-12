@@ -239,8 +239,31 @@ def test_queda_depois_do_envio_recupera_a_nota(emitentes, tmp_path, capsys):
     servidor = Servidor(post=httpx.ReadTimeout("simulado"), depois_da_queda=True)
     assert rodar(emitentes, tmp_path, servidor) == 0
     assert [m for m, _ in servidor.pedidos] == ["GET", "POST", "GET", "GET"]
-    assert "recuperada" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "recuperada" in out
+    assert "a conexão caiu no envio (ReadTimeout: simulado)" in out
     assert (tmp_path / "out" / f"NFSe{CHAVE}.xml").exists()
+
+
+def test_201_ilegivel_diz_a_causa_e_salva_a_resposta(emitentes, tmp_path, capsys):
+    # A primeira nota real veio pela recuperação sem dizer a causa (DEC-044).
+    resposta = httpx.Response(201, json={"Outro": "formato"})
+    servidor = Servidor(post=resposta, depois_da_queda=True)
+    assert rodar(emitentes, tmp_path, servidor) == 0
+    captura = capsys.readouterr()
+    assert "a resposta do envio veio fora do formato esperado (HTTP 201" in captura.out
+    assert "chaveAcesso" in captura.out
+    [salva] = (tmp_path / "out").glob("DPS*-resposta-201-*.json")
+    assert salva.read_bytes() == resposta.content
+    assert (tmp_path / "out" / f"NFSe{CHAVE}.xml").exists()
+
+
+def test_500_com_nota_gerada_diz_a_causa(emitentes, tmp_path, capsys):
+    resposta = httpx.Response(500, json={"erros": [{"Codigo": "X1", "Descricao": "falha"}]})
+    servidor = Servidor(post=resposta, depois_da_queda=True)
+    assert rodar(emitentes, tmp_path, servidor) == 0
+    assert "a SEFIN respondeu com erro (HTTP 500: X1: falha)" in capsys.readouterr().out
+    assert list((tmp_path / "out").glob("DPS*-resposta-500-*.json"))
 
 
 def test_queda_sem_nota_gerada(emitentes, tmp_path, capsys):
