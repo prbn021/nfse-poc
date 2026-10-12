@@ -28,6 +28,7 @@ class RejeicaoApi(Exception):
         self.status = status
         self.id_dps = id_dps
         self.mensagens = mensagens
+        self.corpo = b""  # resposta bruta, preenchida pelo cliente; nunca vai à mensagem
         lista = "; ".join(str(m) for m in mensagens) or "sem mensagens"
         super().__init__(f"SEFIN recusou (HTTP {status}): {lista}")
 
@@ -38,4 +39,5 @@ class RespostaInesperada(Exception):
     def __init__(self, status: int, motivo: str):
         self.status = status
         self.motivo = motivo
+        self.corpo = b""  # resposta bruta, preenchida pelo cliente; nunca vai à mensagem
         super().__init__(f"resposta inesperada da SEFIN (HTTP {status}): {motivo}")

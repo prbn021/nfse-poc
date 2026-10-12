@@ -10,6 +10,7 @@ Não mostra senha, chave nem conteúdo do certificado (INV-05).
 import argparse
 import dataclasses
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -38,6 +39,17 @@ RESPOSTA_INESPERADA = 8
 
 def _erro(texto: str) -> None:
     print(f"[X] {texto}", file=sys.stderr)
+
+
+def _salvar_resposta(saida: Path, id_dps: str, erro: RejeicaoApi | RespostaInesperada) -> None:
+    """Guarda em out/ a resposta bruta da SEFIN, para diagnóstico (DEC-037). Pode ter dados
+    da DPS, por isso fica só em out/, ignorada no git; não tem senha nem chave."""
+    if not erro.corpo:
+        return
+    quando = datetime.now().strftime("%Y%m%d-%H%M%S")
+    arquivo = saida / f"{id_dps}-resposta-{erro.status}-{quando}.json"
+    arquivo.write_bytes(erro.corpo)
+    print(f"Resposta completa da SEFIN: {arquivo}", file=sys.stderr)
 
 
 def main(
@@ -112,6 +124,7 @@ def main(
             return JA_EMITIDA
         except RejeicaoApi as erro:
             _erro(str(erro))
+            _salvar_resposta(saida, dps.id, erro)
             return REJEITADA
         except EnvioIncerto as erro:
             _erro(str(erro))
@@ -121,6 +134,7 @@ def main(
             return ERRO_DE_REDE
         except RespostaInesperada as erro:
             _erro(str(erro))
+            _salvar_resposta(saida, dps.id, erro)
             return RESPOSTA_INESPERADA
 
     nfse = resultado.nfse

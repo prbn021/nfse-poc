@@ -13,6 +13,7 @@ import re
 import secrets
 import ssl
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
@@ -155,45 +156,50 @@ class ClienteNfse:
         resposta = self._pedir(
             "POST", "nfse", corpo_json={"dpsXmlGZipB64": codificar(dps_assinada)}
         )
-        if resposta.status == 201:
-            corpo = _objeto_json(resposta)
-            return NfseEmitida(
-                chave=_chave(resposta.status, corpo),
-                id_dps=_id_dps(resposta.status, corpo),
-                xml=_nfse_xml(resposta.status, corpo),
-                alertas=_mensagens(resposta.status, corpo.get("alertas"), "alertas"),
+        with _anexar_corpo(resposta):
+            if resposta.status == 201:
+                corpo = _objeto_json(resposta)
+                return NfseEmitida(
+                    chave=_chave(resposta.status, corpo),
+                    id_dps=_id_dps(resposta.status, corpo),
+                    xml=_nfse_xml(resposta.status, corpo),
+                    alertas=_mensagens(resposta.status, corpo.get("alertas"), "alertas"),
+                )
+            if resposta.status in (400, 403, 500):
+                raise _rejeicao(resposta)
+            raise RespostaInesperada(
+                resposta.status, f"HTTP {resposta.status} não previsto no envio"
             )
-        if resposta.status in (400, 403, 500):
-            raise _rejeicao(resposta)
-        raise RespostaInesperada(resposta.status, f"HTTP {resposta.status} não previsto no envio")
 
     def chave_da_dps(self, id_dps: str) -> str | None:
         """`GET /dps/{id}`: a chave de acesso da NFS-e gerada a partir da DPS, ou None."""
         if not _ID_DPS.fullmatch(id_dps):
             raise ValueError("Id da DPS fora do formato: 'DPS' seguido de 42 dígitos (INV-04)")
         resposta = self._pedir("GET", f"dps/{id_dps}")
-        if resposta.status == 200:
-            return _chave(resposta.status, _objeto_json(resposta))
-        if resposta.status == 404:
-            return None
-        if resposta.status == 400:
-            raise _rejeicao(resposta)
-        raise RespostaInesperada(
-            resposta.status, f"HTTP {resposta.status} não previsto na consulta"
-        )
+        with _anexar_corpo(resposta):
+            if resposta.status == 200:
+                return _chave(resposta.status, _objeto_json(resposta))
+            if resposta.status == 404:
+                return None
+            if resposta.status == 400:
+                raise _rejeicao(resposta)
+            raise RespostaInesperada(
+                resposta.status, f"HTTP {resposta.status} não previsto na consulta"
+            )
 
     def obter_nfse(self, chave: str) -> bytes:
         """`GET /nfse/{chave}`: o XML da NFS-e, já decodificado."""
         if not _CHAVE.fullmatch(chave):
             raise ValueError("chave de acesso fora do formato: 50 dígitos")
         resposta = self._pedir("GET", f"nfse/{chave}")
-        if resposta.status == 200:
-            return _nfse_xml(resposta.status, _objeto_json(resposta))
-        if resposta.status in (400, 401, 403, 404):
-            raise _rejeicao(resposta)
-        raise RespostaInesperada(
-            resposta.status, f"HTTP {resposta.status} não previsto na consulta"
-        )
+        with _anexar_corpo(resposta):
+            if resposta.status == 200:
+                return _nfse_xml(resposta.status, _objeto_json(resposta))
+            if resposta.status in (400, 401, 403, 404):
+                raise _rejeicao(resposta)
+            raise RespostaInesperada(
+                resposta.status, f"HTTP {resposta.status} não previsto na consulta"
+            )
 
     def _pedir(self, metodo: str, caminho: str, *, corpo_json: dict | None = None) -> Resposta:
         try:
@@ -248,14 +254,27 @@ def _nfse_xml(status: int, corpo: dict) -> bytes:
     raise RespostaInesperada(status, motivo)
 
 
-def _mensagem(item: object) -> MensagemApi | None:
+def _texto(valor: object) -> str | None:
+    if valor is None or isinstance(valor, (dict, list)):
+        return None
+    return str(valor)
+
+
+def _mensagem(item: object) -> MensagemApi:
+    """Lê um `MensagemProcessamento` com tolerância: a primeira transmissão real (2026-10-12)
+    devolveu itens fora do formato da especificação (DEC-037). Nada aqui é descartado sem aviso:
+    o que não se reconhece vira código "?", e a resposta inteira é salva por quem chamou.
+    """
     if not isinstance(item, dict):
-        return None
-    codigo, descricao = item.get("codigo"), item.get("descricao")
-    complemento = item.get("complemento")
-    if not isinstance(codigo, str) or not isinstance(descricao, str):
-        return None
-    return MensagemApi(codigo, descricao, complemento if isinstance(complemento, str) else None)
+        return MensagemApi("?", _texto(item) or "item vazio")
+    # Sem distinguir maiúsculas: `codigo`, `Codigo` e `CODIGO` valem igual.
+    campos = {chave.lower(): valor for chave, valor in item.items() if isinstance(chave, str)}
+    codigo = _texto(campos.get("codigo"))
+    descricao = _texto(campos.get("descricao"))
+    complemento = _texto(campos.get("complemento"))
+    if codigo is None and descricao is None:
+        return MensagemApi("?", "item sem codigo nem descricao", complemento)
+    return MensagemApi(codigo or "?", descricao or "", complemento)
 
 
 def _mensagens(status: int, lista: object, campo: str) -> tuple[MensagemApi, ...]:
@@ -263,10 +282,20 @@ def _mensagens(status: int, lista: object, campo: str) -> tuple[MensagemApi, ...
         return ()
     if not isinstance(lista, list):
         raise RespostaInesperada(status, f"{campo} não é uma lista")
-    mensagens = tuple(_mensagem(item) for item in lista)
-    if None in mensagens:
-        raise RespostaInesperada(status, f"{campo} com item fora do formato codigo/descricao")
-    return mensagens
+    return tuple(_mensagem(item) for item in lista)
+
+
+@contextmanager
+def _anexar_corpo(resposta: Resposta):
+    """Põe o corpo bruto da resposta nas exceções da API, para quem chamou poder salvá-lo.
+
+    O corpo fica num atributo, nunca na mensagem.
+    """
+    try:
+        yield
+    except (RejeicaoApi, RespostaInesperada) as erro:
+        erro.corpo = resposta.corpo
+        raise
 
 
 def _rejeicao(resposta: Resposta) -> RejeicaoApi:

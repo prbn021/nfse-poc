@@ -152,6 +152,18 @@ def test_rejeicao_mostra_os_codigos_e_nao_salva_nfse(emitentes, tmp_path, capsys
     assert "HTTP 400" in err
     assert "E0314: cTribMun inexistente" in err
     assert not list((tmp_path / "out").glob("NFSe*.xml"))
+    # A resposta bruta fica em out/ para diagnóstico (DEC-037).
+    [salva] = (tmp_path / "out").glob("DPS*-resposta-400-*.json")
+    assert salva.read_bytes() == resposta.content
+    assert f"Resposta completa da SEFIN: {salva}" in err
+
+
+def test_resposta_inesperada_tambem_e_salva(emitentes, tmp_path, capsys):
+    resposta = httpx.Response(502, content=b"Bad Gateway")
+    assert rodar(emitentes, tmp_path, Servidor(post=resposta)) == emitir.RESPOSTA_INESPERADA
+    [salva] = (tmp_path / "out").glob("DPS*-resposta-502-*.json")
+    assert salva.read_bytes() == b"Bad Gateway"
+    assert "Bad Gateway" not in capsys.readouterr().err
 
 
 def test_dps_ja_emitida_nao_e_enviada(emitentes, tmp_path, capsys):

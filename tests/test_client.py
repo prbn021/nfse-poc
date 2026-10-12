@@ -347,6 +347,68 @@ def test_emitir_resposta_inesperada(cert, resposta, motivo):
     assert "<html/>" not in str(erro.value)
 
 
+@pytest.mark.parametrize(
+    ("item", "esperada"),
+    [
+        # Fora do formato da especificação: a primeira transmissão real veio assim (DEC-037).
+        ({"Codigo": "E0014", "Descricao": "já existe"}, MensagemApi("E0014", "já existe")),
+        ({"CODIGO": "E1", "DESCRICAO": "x", "COMPLEMENTO": "y"}, MensagemApi("E1", "x", "y")),
+        ({"codigo": "E0008", "descricao": None}, MensagemApi("E0008", "")),
+        ({"codigo": 714, "descricao": "assinatura"}, MensagemApi("714", "assinatura")),
+        ({"descricao": "sem código"}, MensagemApi("?", "sem código")),
+        (
+            {"complemento": "só complemento"},
+            MensagemApi("?", "item sem codigo nem descricao", "só complemento"),
+        ),
+        ({}, MensagemApi("?", "item sem codigo nem descricao")),
+        ("texto solto", MensagemApi("?", "texto solto")),
+        (None, MensagemApi("?", "item vazio")),
+    ],
+)
+def test_mensagens_fora_do_formato_sao_lidas_com_tolerancia(cert, item, esperada):
+    resposta = json_resposta(400, {"idDPS": ID_DPS, "erros": [item]})
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RejeicaoApi) as erro,
+    ):
+        cliente.emitir(b"<DPS/>")
+    assert erro.value.mensagens == (esperada,)
+
+
+def test_rejeicao_guarda_o_corpo_bruto_fora_da_mensagem(cert):
+    resposta = json_resposta(400, {"erros": [{"codigo": "E1", "descricao": "x"}], "extra": "Z9"})
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RejeicaoApi) as erro,
+    ):
+        cliente.emitir(b"<DPS/>")
+    assert erro.value.corpo == resposta.content
+    assert "Z9" not in str(erro.value)
+
+
+@pytest.mark.parametrize(
+    "resposta",
+    [httpx.Response(502, content=b"Bad Gateway"), json_resposta(201, sucesso(chaveAcesso="1"))],
+)
+def test_resposta_inesperada_guarda_o_corpo_bruto(cert, resposta):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RespostaInesperada) as erro,
+    ):
+        cliente.emitir(b"<DPS/>")
+    assert erro.value.corpo == resposta.content
+
+
+def test_rejeicao_na_consulta_guarda_o_corpo(cert):
+    resposta = json_resposta(400, {"erro": {"codigo": "E400", "descricao": "Id inválido"}})
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RejeicaoApi) as erro,
+    ):
+        cliente.chave_da_dps(ID_DPS)
+    assert erro.value.corpo == resposta.content
+
+
 def test_emitir_erro_de_conexao(cert):
     with (
         ClienteNfse(config(), cert, transporte=transporte(httpx.ReadTimeout("simulado"))) as c,
