@@ -18,18 +18,18 @@ from pathlib import Path
 from lxml import etree
 
 from src.assinatura import conferir_assinatura_do_sistema
-from src.dps import NS, VERSAO, validar_xml
+from src.dps import NS, VERSAO, texto_tsstring, validar_xml
 
 _N = {"n": NS}
 _HOMOLOGACAO = "2"  # tpAmb da produção restrita (INV-02)
 
 # Código do evento de cancelamento pelo emitente (Anexo II, aba TIPO EVENTOS DE NFSe).
 CANCELAMENTO = "101101"
+# Cancelamento por substituição: gerado pelo sistema ao receber a DPS substituta (T-031).
+SUBSTITUICAO = "105102"
 _DESCRICAO_CANCELAMENTO = "Cancelamento de NFS-e"
 # cMotivo (TSCodJustCanc): 1 Erro na Emissão, 2 Serviço não Prestado, 9 Outros.
 _MOTIVOS_CANCELAMENTO = (1, 2, 9)
-# TSString: sem espaço nas pontas nem quebra de linha, só caracteres de U+0020 a U+00FF.
-_TSSTRING = re.compile("[!-\u00ff](?:[ -\u00ff]*[!-\u00ff])?")
 # Na chave de acesso, a posição 9 é o tipo de inscrição federal (2 = CNPJ) e as posições 10
 # a 23 são a inscrição do emitente (Anexo I, docs/SOURCES.md).
 _TIPO_INSCRICAO_CNPJ = "2"
@@ -39,16 +39,6 @@ def _digitos(valor, tamanho: int, campo: str) -> str:
     if not isinstance(valor, str) or not re.fullmatch(rf"\d{{{tamanho}}}", valor):
         raise ValueError(f"{campo} deve ter {tamanho} dígitos numéricos")
     return valor
-
-
-def _texto(valor, minimo: int, maximo: int, campo: str) -> None:
-    if not isinstance(valor, str) or not (minimo <= len(valor) <= maximo):
-        raise ValueError(f"{campo} deve ter de {minimo} a {maximo} caracteres")
-    if not _TSSTRING.fullmatch(valor):
-        raise ValueError(
-            f"{campo} só aceita caracteres de U+0020 a U+00FF, sem quebra de linha nem espaço "
-            "nas pontas (TSString do XSD)"
-        )
 
 
 @dataclass(frozen=True)
@@ -91,8 +81,8 @@ class PedidoCancelamento:
             raise ValueError(
                 "c_motivo deve ser 1 (Erro na Emissão), 2 (Serviço não Prestado) ou 9 (Outros)"
             )
-        _texto(self.x_motivo, 15, 255, "x_motivo")
-        _texto(self.ver_aplic, 1, 20, "ver_aplic")
+        texto_tsstring(self.x_motivo, 15, 255, "x_motivo")
+        texto_tsstring(self.ver_aplic, 1, 20, "ver_aplic")
 
     @property
     def id(self) -> str:
@@ -176,4 +166,19 @@ def conferir_evento(
         conferir_assinatura_do_sistema(xml)
     except ValueError:
         problemas.append("assinatura do evento não confere com o certificado que ele traz")
+    return problemas
+
+
+def conferir_substituicao(
+    xml: bytes, *, chave_substituida: str, chave_substituta: str, xsd: Path
+) -> list[str]:
+    """Confere o evento 105102 da nota substituída, como `conferir_evento`, e se ele aponta a
+    nota nova em `chSubstituta` (T-031)."""
+    problemas = conferir_evento(xml, chave=chave_substituida, tipo=SUBSTITUICAO, xsd=xsd)
+    raiz = _ler(xml)
+    grupo = None
+    if raiz is not None:
+        grupo = raiz.find(f"n:infEvento/n:pedRegEvento/n:infPedReg/n:e{SUBSTITUICAO}", _N)
+    if grupo is not None and grupo.findtext("n:chSubstituta", namespaces=_N) != chave_substituta:
+        problemas.append("o evento 105102 não aponta a nota nova (chSubstituta diferente)")
     return problemas

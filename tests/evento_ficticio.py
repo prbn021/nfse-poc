@@ -13,6 +13,7 @@ from tests.nfse_ficticia import CHAVE
 from tests.pfx import CNPJ, chave_de_teste, gerar_certificado
 
 CANCELAMENTO = "101101"
+SUBSTITUICAO = "105102"
 
 
 def _sub(pai, nome: str, texto: str | None = None):
@@ -29,6 +30,7 @@ def gerar_evento(
     tp_amb: str = "2",
     assinar: bool = True,
     id_pedido: str | None = None,
+    ch_substituta: str | None = None,
 ) -> bytes:
     raiz = etree.Element(f"{{{NS}}}evento", nsmap={None: NS}, versao="1.01")
     inf = _sub(raiz, "infEvento")
@@ -49,10 +51,18 @@ def gerar_evento(
     _sub(inf_ped, "dhEvento", "2026-10-12T10:59:00-03:00")
     _sub(inf_ped, "CNPJAutor", CNPJ)
     _sub(inf_ped, "chNFSe", chave)
-    grupo = _sub(inf_ped, f"e{CANCELAMENTO}")
-    _sub(grupo, "xDesc", "Cancelamento de NFS-e")
-    _sub(grupo, "cMotivo", "1")
-    _sub(grupo, "xMotivo", "Erro na emissão, nota fictícia")
+    if tipo == SUBSTITUICAO:
+        # Gerado pelo sistema ao receber a DPS substituta (T-031).
+        grupo = _sub(inf_ped, f"e{SUBSTITUICAO}")
+        _sub(grupo, "xDesc", "Cancelamento de NFS-e por Substituição")
+        _sub(grupo, "cMotivo", "99")
+        _sub(grupo, "xMotivo", "Substituicao de teste, nota ficticia")
+        _sub(grupo, "chSubstituta", ch_substituta or chave)
+    else:
+        grupo = _sub(inf_ped, f"e{CANCELAMENTO}")
+        _sub(grupo, "xDesc", "Cancelamento de NFS-e")
+        _sub(grupo, "cMotivo", "1")
+        _sub(grupo, "xMotivo", "Erro na emissão, nota fictícia")
 
     if assinar:
         signer = XMLSigner(

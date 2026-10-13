@@ -166,6 +166,14 @@ Use um `--n-dps` novo a cada envio (a SEFIN recusa série e número repetidos, E
 | `7` | NFS-e gerada e salva, mas algo não bateu na conferência |
 | `8` | resposta da SEFIN fora do formato esperado |
 
+Para substituir uma NFS-e do emitente, emita a DPS nova com `--substituir`:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\emitir.py --emitente minha-empresa --n-dps 4 --c-trib-nac 123456 --substituir <chave> --motivo-subst 99 --descricao-subst "Substituicao de teste em producao restrita"
+```
+
+`--motivo-subst` é `1` (desenquadramento do Simples Nacional), `2` (enquadramento no Simples Nacional), `3` (inclusão retroativa de imunidade ou isenção), `4` (exclusão retroativa de imunidade ou isenção), `5` (rejeição pelo tomador ou intermediário) ou `99` (Outros, que exige `--descricao-subst`, de 15 a 255 caracteres). A substituição não volta atrás: a nota substituída fica cancelada. Antes de enviar, o script consulta a nota substituída e recusa, sem enviar nada, a que é de outro emitente, a que não confere, a que já foi cancelada ou substituída, e a que tem outro tomador ou outro valor de serviço (para ME/EPP, eles não podem mudar, E0061); a data de competência da DPS nova é copiada da nota substituída. Depois da emissão, consulta o evento 105102 que a SEFIN registra na nota substituída, grava `out\Evento<chave>-105102-1.xml` e confere se ele aponta a nota nova; se o evento ainda não existir, só avisa. Os códigos de saída são os da tabela acima.
+
 Para consultar em produção restrita uma NFS-e do emitente pela chave de acesso e, se quiser, um evento dela:
 
 ```powershell

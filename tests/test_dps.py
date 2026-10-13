@@ -16,6 +16,7 @@ from src.dps import (
     PisCofins,
     Prestador,
     Servico,
+    Substituicao,
     Tomador,
     Valores,
     gerar_id,
@@ -284,7 +285,8 @@ def test_nenhum_default_de_src_carrega_dado_de_emitente():
         "pis_cofins": None,
     }
     assert _defaults(PisCofins) == {"tp_ret_pis_cofins": None}
-    assert _defaults(Dps) == {"ver_aplic": "nfse-poc-0.1", "tp_emit": 1}
+    assert _defaults(Substituicao) == {"x_motivo": None}
+    assert _defaults(Dps) == {"ver_aplic": "nfse-poc-0.1", "tp_emit": 1, "subst": None}
 
 
 # --- faixa de `serie` (T-014, DEC-019) -------------------------------------------------------

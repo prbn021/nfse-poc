@@ -29,6 +29,21 @@ def _dinheiro(valor: Decimal) -> str:
     return f"{Decimal(valor):.2f}"
 
 
+# TSString: sem espaço nas pontas nem quebra de linha, só caracteres de U+0020 a U+00FF.
+TSSTRING = re.compile("[!-\u00ff](?:[ -\u00ff]*[!-\u00ff])?")
+
+
+def texto_tsstring(valor: object, minimo: int, maximo: int, campo: str) -> None:
+    """Texto do tipo TSString do XSD, de `minimo` a `maximo` caracteres."""
+    if not isinstance(valor, str) or not (minimo <= len(valor) <= maximo):
+        raise ValueError(f"{campo} deve ter de {minimo} a {maximo} caracteres")
+    if not TSSTRING.fullmatch(valor):
+        raise ValueError(
+            f"{campo} só aceita caracteres de U+0020 a U+00FF, sem quebra de linha nem espaço "
+            "nas pontas (TSString do XSD)"
+        )
+
+
 # Simples Nacional (docs/SPEC.md §6, Anexo I v1.01).
 NAO_OPTANTE, MEI, ME_EPP = 1, 2, 3
 _OP_SIMP_NAC = {NAO_OPTANTE: "Não Optante", MEI: "MEI", ME_EPP: "ME/EPP"}
@@ -296,6 +311,42 @@ class Valores:
             )
 
 
+# Substituição (T-031). Anexo I v1.01, grupo infDPS/subst: o XSD (TSCodJustSubst) pede o
+# código com dois dígitos, embora o Anexo I diga tamanho 1 (docs/SOURCES.md).
+OUTROS = 99
+MOTIVOS_SUBSTITUICAO = (1, 2, 3, 4, 5, OUTROS)
+
+
+@dataclass(frozen=True)
+class Substituicao:
+    """Grupo subst: a NFS-e que esta DPS substitui (TCSubstituicao)."""
+
+    chave: str  # chave de acesso da NFS-e substituída, 50 dígitos
+    # 1 Desenquadramento do Simples Nacional, 2 Enquadramento no Simples Nacional,
+    # 3 Inclusão retroativa de imunidade/isenção, 4 Exclusão retroativa de imunidade/isenção,
+    # 5 Rejeição pelo tomador ou intermediário responsável, 99 Outros.
+    c_motivo: int
+    x_motivo: str | None = None  # obrigatório com 99 (E0078)
+
+    def __post_init__(self):
+        if not isinstance(self.chave, str) or not re.fullmatch(r"\d{50}", self.chave):
+            raise ValueError("subst.chave deve ter 50 dígitos numéricos")
+        if (
+            isinstance(self.c_motivo, bool)
+            or not isinstance(self.c_motivo, int)
+            or self.c_motivo not in MOTIVOS_SUBSTITUICAO
+        ):
+            raise ValueError(
+                "subst.c_motivo deve ser 1, 2, 3, 4, 5 ou 99 (TSCodJustSubst), "
+                f"recebido: {self.c_motivo!r}"
+            )
+        if self.x_motivo is None:
+            if self.c_motivo == OUTROS:
+                raise ValueError("subst.x_motivo é obrigatório com o motivo 99, Outros (E0078)")
+        else:
+            texto_tsstring(self.x_motivo, 15, 255, "subst.x_motivo")
+
+
 @dataclass(frozen=True)
 class Dps:
     tp_amb: int  # 1=produção, 2=homologação
@@ -310,6 +361,7 @@ class Dps:
     valores: Valores
     ver_aplic: str = "nfse-poc-0.1"
     tp_emit: int = 1  # 1=Prestador
+    subst: Substituicao | None = None  # NFS-e substituída (T-031)
 
     def __post_init__(self):
         if self.tp_amb not in (1, 2):
@@ -331,6 +383,23 @@ class Dps:
             raise ValueError("pAliq é obrigatório quando o ISSQN é retido (tp_ret_issqn 2 ou 3)")
         if not retido and self.valores.p_aliq is not None:
             raise ValueError("pAliq não pode ser informado sem retenção do ISSQN (tp_ret_issqn 1)")
+        if self.subst is not None:
+            self._conferir_chave_substituida(self.subst.chave)
+
+    def _conferir_chave_substituida(self, chave: str) -> None:
+        # E0042: município (posições 1 a 7), tipo de inscrição (9) e inscrição (10 a 23) da
+        # chave substituída batem com o Id desta DPS (Anexo I). O DV fica com o servidor: o
+        # algoritmo não está documentado.
+        for parte, esperado, nome in (
+            (chave[0:7], self.c_loc_emi, "município"),
+            (chave[8], "2", "tipo de inscrição"),
+            (chave[9:23], self.prestador.cnpj, "CNPJ"),
+        ):
+            if parte != esperado:
+                raise ValueError(
+                    f"a chave substituída é de outro {nome}: ela precisa ter o mesmo município, "
+                    "tipo de inscrição e CNPJ do Id desta DPS (E0042)"
+                )
 
     @property
     def id(self) -> str:
@@ -371,6 +440,12 @@ def para_xml(dps: Dps) -> bytes:
     _sub(inf, "dCompet", dps.d_compet.isoformat())
     _sub(inf, "tpEmit", str(dps.tp_emit))
     _sub(inf, "cLocEmi", dps.c_loc_emi)
+    if dps.subst is not None:
+        subst = _sub(inf, "subst")
+        _sub(subst, "chSubstda", dps.subst.chave)
+        _sub(subst, "cMotivo", f"{dps.subst.c_motivo:02d}")
+        if dps.subst.x_motivo is not None:
+            _sub(subst, "xMotivo", dps.subst.x_motivo)
 
     prest = _sub(inf, "prest")
     _sub(prest, "CNPJ", dps.prestador.cnpj)

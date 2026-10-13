@@ -7,6 +7,8 @@ aponta o que não bate (XSD, Ids, ambiente, assinatura), para quem rodou o envio
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from lxml import etree
@@ -25,6 +27,45 @@ class NfseEmitida:
     id_dps: str | None  # None quando a SEFIN devolve só o Id da NFS-e (DEC-045)
     xml: bytes = field(repr=False)
     alertas: tuple[MensagemApi, ...] = ()
+
+
+@dataclass(frozen=True)
+class ResumoDps:
+    """O que a substituta de uma nota ME/EPP não pode mudar (E0061; T-031)."""
+
+    d_compet: date
+    tomador: str | None  # CPF ou CNPJ; None sem tomador identificado
+    v_serv: Decimal
+
+
+def resumo_da_dps(xml: bytes) -> ResumoDps:
+    """Competência, tomador e valor do serviço da DPS embutida numa NFS-e.
+
+    Levanta `ValueError` se o XML não for uma NFS-e ou se faltar um desses campos. Não
+    confere a nota: isso é de `conferir_nfse`.
+    """
+    raiz = _ler(xml)
+    inf = raiz.find("n:infNFSe/n:DPS/n:infDPS", _N) if raiz is not None else None
+    if inf is None:
+        raise ValueError("o conteúdo não é uma NFS-e com a DPS embutida")
+    texto = inf.findtext("n:dCompet", namespaces=_N)
+    try:
+        d_compet = date.fromisoformat(texto or "")
+    except ValueError:
+        d_compet = None
+    if d_compet is None:
+        raise ValueError("a DPS embutida na NFS-e não tem dCompet válida")
+    toma = inf.find("n:toma", _N)
+    tomador = None
+    if toma is not None:
+        tomador = toma.findtext("n:CNPJ", namespaces=_N) or toma.findtext("n:CPF", namespaces=_N)
+    try:
+        v_serv = Decimal(inf.findtext("n:valores/n:vServPrest/n:vServ", namespaces=_N) or "")
+    except InvalidOperation:
+        v_serv = None
+    if v_serv is None:
+        raise ValueError("a DPS embutida na NFS-e não tem vServ válido")
+    return ResumoDps(d_compet=d_compet, tomador=tomador, v_serv=v_serv)
 
 
 def localizar_xsd_nfse(xsd_dir: Path) -> Path | None:
