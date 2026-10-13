@@ -2,6 +2,7 @@
 `httpx.MockTransport` e o handshake TLS é feito em memória, com o PFX autoassinado de tests/pfx.py.
 """
 
+import base64
 import json
 import logging
 import ssl
@@ -704,6 +705,69 @@ def test_consultar_evento_devolve_o_xml(cert):
     assert [(p.method, str(p.url)) for p in pedidos] == [
         ("GET", f"{BASE}/nfse/{CHAVE}/eventos/101101/1")
     ]
+
+
+def evento_200_real(*itens) -> httpx.Response:
+    """A forma que a SEFIN real devolveu em 2026-10-13: lista `eventos`, com `arquivoXml` em
+    Base64 do texto GZip+Base64 (Base64 em dobro), em vez de `eventoXmlGZipB64`."""
+    return json_resposta(
+        200,
+        {
+            "dataHoraProcessamento": QUANDO,
+            "tipoAmbiente": 2,
+            "versaoAplicativo": "SefinNacional_1.6.0",
+            "eventos": list(itens),
+        },
+    )
+
+
+def item_evento(xml=EVENTO_XML, *, tipo=101101, numero=1, dobrado=True) -> dict:
+    texto = codificar(xml)
+    if dobrado:
+        texto = base64.b64encode(texto.encode("ascii")).decode("ascii")
+    return {
+        "chaveAcesso": CHAVE,
+        "tipoEvento": tipo,
+        "numeroPedidoRegistroEvento": numero,
+        "dataHoraRecebimento": "2026-10-13T16:37:00.957",
+        "arquivoXml": texto,
+    }
+
+
+@pytest.mark.parametrize("dobrado", [True, False])
+def test_consultar_evento_le_a_lista_eventos_da_sefin_real(cert, dobrado):
+    resposta = evento_200_real(item_evento(dobrado=dobrado))
+    with ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente:
+        assert cliente.consultar_evento(CHAVE, "101101", 1) == EVENTO_XML
+
+
+def test_consultar_evento_escolhe_o_item_do_tipo_e_numero_pedidos(cert):
+    outro = b"<evento>outro</evento>"
+    resposta = evento_200_real(
+        item_evento(outro, tipo=105102), item_evento(outro, numero=2), item_evento()
+    )
+    with ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente:
+        assert cliente.consultar_evento(CHAVE, "101101", 1) == EVENTO_XML
+
+
+@pytest.mark.parametrize(
+    ("corpo", "motivo"),
+    [
+        ({"eventos": []}, "nenhum evento 101101/1 na lista"),
+        ({"eventos": [{"tipoEvento": 101101, "numeroPedidoRegistroEvento": 1}]}, "arquivoXml"),
+        ({"eventos": "x"}, "eventos não é uma lista"),
+        (
+            {"eventos": [dict(item_evento(), arquivoXml="nao-e-base64!")]},
+            "arquivoXml inválido",
+        ),
+    ],
+)
+def test_consultar_evento_lista_fora_do_formato(cert, corpo, motivo):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(json_resposta(200, corpo))) as c,
+        pytest.raises(RespostaInesperada, match=motivo),
+    ):
+        c.consultar_evento(CHAVE, "101101", 1)
 
 
 def test_consultar_evento_sem_evento_devolve_none(cert):

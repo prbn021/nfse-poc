@@ -8,6 +8,7 @@ DEC-036), e registra eventos da NFS-e (T-030). Não repete pedidos: a política 
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -252,7 +253,7 @@ class ClienteNfse:
         resposta = self._pedir("GET", f"nfse/{chave}/eventos/{tipo}/{seq}")
         with _anexar_corpo(resposta):
             if resposta.status == 200:
-                return _evento_xml(resposta.status, _objeto_json(resposta))
+                return _evento_consultado(resposta.status, _objeto_json(resposta), tipo, seq)
             if resposta.status == 404:
                 return None
             if resposta.status in (401, 422):
@@ -410,6 +411,49 @@ def _evento_xml(status: int, corpo: dict) -> bytes:
         return decodificar(texto)
     except ValueError as erro:
         motivo = f"eventoXmlGZipB64 inválido: {erro}"
+    raise RespostaInesperada(status, motivo)
+
+
+def _evento_consultado(status: int, corpo: dict, tipo: str, seq: int) -> bytes:
+    """O evento da consulta `GET /nfse/{chave}/eventos/{tipo}/{seq}`.
+
+    A especificação descreve `eventoXmlGZipB64`, mas a SEFIN real devolveu em 2026-10-13 uma
+    lista `eventos`, com `tipoEvento`, `numeroPedidoRegistroEvento` e `arquivoXml` em Base64 do
+    texto GZip+Base64 (Base64 em dobro) (T-030, DEC-057). As duas formas são lidas; na lista,
+    vale o item do tipo e do número pedidos.
+    """
+    if "eventoxmlgzipb64" in corpo or "eventos" not in corpo:
+        return _evento_xml(status, corpo)
+    lista = corpo["eventos"]
+    if not isinstance(lista, list):
+        raise RespostaInesperada(status, "eventos não é uma lista")
+    for item in lista:
+        if not isinstance(item, dict):
+            continue
+        campos = {chave.lower(): valor for chave, valor in item.items() if isinstance(chave, str)}
+        if str(campos.get("tipoevento")) != tipo:
+            continue
+        if str(campos.get("numeropedidoregistroevento")) != str(seq):
+            continue
+        texto = campos.get("arquivoxml")
+        if not isinstance(texto, str):
+            raise RespostaInesperada(status, "arquivoXml ausente no item da lista eventos")
+        return _arquivo_xml(status, texto)
+    raise RespostaInesperada(status, f"nenhum evento {tipo}/{seq} na lista eventos")
+
+
+def _arquivo_xml(status: int, texto: str) -> bytes:
+    """`arquivoXml`: GZip+Base64, ou o Base64 desse texto, como a SEFIN real devolve."""
+    try:
+        interno = base64.b64decode(texto, validate=True)
+    except ValueError:
+        interno = b""
+    if interno.startswith(b"H4sI"):  # Base64 de um GZip: o Base64 veio em dobro
+        texto = interno.decode("ascii")
+    try:
+        return decodificar(texto)
+    except ValueError as erro:
+        motivo = f"arquivoXml inválido: {erro}"
     raise RespostaInesperada(status, motivo)
 
 
