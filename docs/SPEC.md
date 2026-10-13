@@ -483,42 +483,53 @@ Phase gates: toda PR é um phase gate (decisão do humano em 2026-10-07). Cada t
 | T-034 | Grupo IBS/CBS na DPS | T-018 | §5, §6 | todo | A definir depois de ler o grupo `IBSCBS` (`TCRTCInfoIBSCBS`) no XSD v1.01, o Anexo C (`anexo-c-indop-ibscbs-snnfse-v1-01.xlsx`, em `gov-docs/`), as regras do Anexo I e a fonte oficial da E0855, que não está no Anexo I v1.01; decidir os valores da DPS de exemplo (indicador de operação, classificação tributária, alíquotas). Criada em 2026-10-13 (DEC-060): desde algum momento entre 2026-10-12 14:22 e 2026-10-13 17:45, a SEFIN de produção restrita recusa com E0855 toda DPS com competência a partir de 01/10/2026 sem o grupo, o que bloqueia qualquer emissão nova. Milestone e momento de começar: Q-26 |
 | T-035 | Substituição real em produção restrita | T-031, T-034 | §3, §6, §7 | todo | Criada em 2026-10-13 com o critério (7) da T-031 (DEC-060): (1) o humano substitui a nota 3 com o `emitir.py --substituir`, motivo 99 com descrição, e a DPS leva o grupo IBS/CBS da T-034; (2) a consulta do evento 105102 confere a nota substituta; (3) o resultado vai para o spec e para `docs/SOURCES.md`. A primeira tentativa (2026-10-13 17:45, DPS número 4) foi recusada com E0855 e não consumiu o número |
 
-### Ponto de retomada (2026-10-13)
+### Ponto de retomada (2026-10-13, fim da sessão)
 
-Estado em 2026-10-13. Para retomar com o agente: pedir que leia o `CLAUDE.md` e este ponto de retomada.
+Estado ao fim da sessão de 2026-10-13. Para retomar com o agente: pedir que leia o `CLAUDE.md` e este ponto de retomada.
 
 **Onde o trabalho parou**
 
-- `main` está em `5ffda50` e contém T-000 a T-020, T-024 e T-026 a T-030, todas `done`. T-007 entrou pela PR #19, T-026 pela PR #20, T-020 pela PR #21, T-024 pela PR #22, T-027 pela PR #23, T-028 pela PR #24, T-029 pela PR #25 e T-030 pela PR #26; as seis primeiras foram marcadas `done` pelo humano em 2026-10-12, e a T-029 e a T-030 em 2026-10-13 (transcrito pelo agente, DEC-007).
-- Milestones M1, M2 e M3 fechados pelo humano (M3 em 2026-10-12). M4 em andamento (DEC-050): T-024 e T-027 a T-030 `done`; faltam T-031 a T-033 (a T-033 `blocked` na Q-25). A fase descrita em §1 está completa: a DPS de exemplo é gerada, validada, assinada, empacotada, transmitida por mTLS à produção restrita, e a NFS-e de retorno é decodificada, conferida e salva.
-- Três NFS-e autorizadas em produção restrita em 2026-10-12 (série 1, números 1 a 3), com o certificado do primeiro emitente; a terceira com o 201 lido direto. Os arquivos estão em `out/`, fora do git. O próximo número livre na série 1 é o 4 (E0014).
-- A T-030 entrou em `main` pela PR #26 (DEC-053 a DEC-058). Em produção restrita, em 2026-10-13: cinco cancelamentos pelo `cancelar.py --confirmar` (notas 1 e 2, com e sem comentários na canonicalização, com e sem acento) voltaram HTTP 500 com `erro: []`, sem evento registrado (DEC-054, DEC-055); sondas por um script avulso fora do git (`out/diagnostico_evento.py`) mostraram que a SEFIN lê o pedido 1.01, recusa SHA1 com E0714 e quebra com SHA256 antes da regra E1843 (DEC-056); o humano cancelou as notas 2 e 1 pelo Emissor Nacional web, que manda o mesmo pedido sem assinatura, e a consulta do projeto conferiu os dois eventos (DEC-057). O cancelamento real pela API passou para a T-033, `blocked` na Q-25 (DEC-058). Só a nota 3 continua autorizada, reservada para a T-031. A consulta real da T-028 foi feita pelo humano em 2026-10-13 (notas 1 e 2, nota e evento conferidos). A transmissão real de uma DPS de obra (T-020) é opcional e não foi feita.
+- `main` está em `5ffda50` e contém T-000 a T-020, T-024 e T-026 a T-030, todas `done` (a T-030 entrou pela PR #26). A marcação `done` da T-030 está no primeiro commit da branch da T-031 (`ffcddc7`), como manda a regra de fazer a marcação na próxima task.
+- Branch `t-031-substitute-nfse`, publicada, com a PR da T-031 **aberta** e a T-031 em `review` (DEC-059, DEC-060), aguardando a revisão do humano. Ao retomar, conferir se a PR foi mesclada: se sim, a T-031 vai a `done` no primeiro commit da próxima task.
+- Milestones M1, M2 e M3 fechados pelo humano. M4 em andamento (DEC-050): T-024 e T-027 a T-030 `done`; T-031 em `review`; T-032 `todo`; T-033 `blocked` (Q-25); T-035 `todo`, dependente da T-034. A T-034 (grupo IBS/CBS na DPS) ainda não tem milestone (Q-26).
+- Notas em produção restrita (série 1, emitente `lika`): as notas 1 e 2 foram canceladas pelo humano pelo Emissor Nacional web em 2026-10-13; a nota 3 continua autorizada, sem eventos, reservada para a T-035. O número 4 não foi consumido (a DPS 4 foi recusada na recepção com E0855). Os arquivos estão em `out/`, fora do git, junto com `out/diagnostico_evento.py`, o script avulso de sondas da T-030.
 
-**O que a sessão de 2026-10-12 descobriu sobre a API real** (detalhes em `docs/SOURCES.md` e nas DEC-037 a DEC-046)
+**O que foi e o que não foi verificado em produção restrita**
 
-- Erros do `POST /nfse` vêm com `Codigo` e `Descricao` em PascalCase, sem `Complemento`; o 201 vem em camelCase, mas com `idDps` = "NFS" + chave (o Id da NFS-e, não o da DPS).
-- O perfil de assinatura de `src/assinatura.py` é aceito, e a `serie` vai sem zeros à esquerda (Q-11 respondida).
-- E0312 apareceu porque o município de incidência parametriza o serviço com desdobramento municipal: a DPS precisa do `cTribMun` certo. A consulta no ADN (`scripts/consultar_parametros.py`) aceita o código só no formato pontuado `NN.NN.NN.NNN`.
-- Comando que emitiu as notas: `scripts\emitir.py --emitente <nome> --n-dps <N> --c-trib-nac <cTribNac> --c-trib-mun <cTribMun>`, com os códigos do serviço do emitente (os do primeiro emitente estão na nota real em `docs/referencia/`, fora do git, e não entram no repositório).
+- T-028 (consulta): verificada nas notas 1, 2 e 3, nota e evento conferidos.
+- T-030 (cancelamento): verificados o ensaio sem `--confirmar`, a consulta antes do envio e a conferência de eventos reais (os do portal). **Não verificado:** um cancelamento pelo script; a SEFIN responde HTTP 500 com `erro: []` ao pedido assinado pela API, embora o portal cancele com o mesmo leiaute sem assinatura (DEC-055 a DEC-057). Passou para a T-033.
+- T-031 (substituição): verificados a consulta da nota substituída, a cópia da competência e a DPS com `subst`, que a SEFIN leu e recusou só por regra de negócio. **Não verificado:** a substituição de fato e o evento 105102; a SEFIN passou a exigir o grupo IBS/CBS (E0855, DEC-060). Passou para a T-035.
+- Por isso a Q-24 (critério de sucesso do M4, que inclui "uma é cancelada, uma é substituída") depende da T-033 e da T-035, ou de uma nova decisão do humano.
+
+**O que as sessões descobriram sobre a API real** (detalhes em `docs/SOURCES.md`)
+
+- 2026-10-12 (DEC-037 a DEC-046): erros do `POST /nfse` vêm em PascalCase, sem `Complemento`; o 201 traz em `idDps` o Id da NFS-e; o perfil de assinatura da DPS é aceito; E0312 pede o `cTribMun` certo, e a consulta no ADN aceita o código só no formato `NN.NN.NN.NNN`.
+- 2026-10-13 (DEC-054 a DEC-060): no registro de evento, `erro` vem como lista; a consulta de evento existente devolve uma lista `eventos` com `arquivoXml` em Base64 dobrado (o cliente lê as duas formas); a SEFIN de produção restrita quebra (500) ao processar o pedido de evento assinado pela API, com SHA256, e recusa SHA1 com E0714; desde entre 2026-10-12 14:22 e 2026-10-13 17:45, recusa com E0855 toda DPS com competência a partir de 01/10/2026 sem o grupo IBS/CBS, regra que não está no Anexo I v1.01 do projeto e que diverge do que fontes de terceiros dizem do Ato Conjunto RFB/CGIBS nº 4 para o Simples Nacional (Q-26).
+- Comando que emitiu as notas: `scripts\emitir.py --emitente <nome> --n-dps <N> --c-trib-nac <cTribNac> --c-trib-mun <cTribMun>`, com os códigos do serviço do emitente (os do primeiro emitente estão na nota real em `docs/referencia/` e nas notas em `out/`, fora do git).
 
 **Para preparar uma máquina**
 
-1. Seguir "Preparar o ambiente" do `README.md` (instalação travada, G-5; o signxml entrou na T-005) e rodar G-1 a G-4, G-6 e G-7.
-2. Não viajam pelo git e precisam ser levados à mão, se forem necessários: `certs/*.pfx` e os arquivos de `emitentes/` (menos o exemplo), que têm a senha; o `.env`; o que está em `docs/referencia/` fora de `gov-docs/` (a nota de exemplo, com dados reais); `out/`, se quiser as notas emitidas; chave SSH; `git config user.name`/`user.email`. `schemas/1.01-local` é regenerada pelos scripts.
+1. Seguir "Preparar o ambiente" do `README.md` (instalação travada, G-5) e rodar G-1 a G-4, G-6 e G-7.
+2. Não viajam pelo git e precisam ser levados à mão, se forem necessários: `certs/*.pfx` e os arquivos de `emitentes/` (menos o exemplo), que têm a senha; o `.env`; o que está em `docs/referencia/` fora de `gov-docs/`; `out/`, se quiser as notas, os eventos e o script de sondas; chave SSH; `git config user.name`/`user.email`. `schemas/1.01-local` é regenerada pelos scripts.
 3. Se a máquina não tiver o `gh`, as PRs são abertas pela interface do GitHub, com título e descrição em inglês entregues pelo agente.
 
-**Próxima task e o que está pendente**
+**Ao retomar: decisões do humano e próximas tasks**
 
-- T-031 (substituição) em `review` na branch `t-031-substitute-nfse` (DEC-059, DEC-060). A substituição real da nota 3 (2026-10-13 17:45, DPS número 4) foi recusada com E0855: desde algum momento entre 2026-10-12 14:22 e 2026-10-13 17:45, a SEFIN de produção restrita exige o grupo IBS/CBS em toda DPS com competência a partir de 01/10/2026; nada foi gerado, e a nota 3 continua autorizada e sem eventos. O critério (7) passou para a T-035, que depende da T-034 (grupo IBS/CBS na DPS, `todo`). Qualquer emissão nova em produção restrita depende da T-034, inclusive a nota de que a T-033 precisa. A Q-26 pergunta em que milestone a T-034 entra. Depois: T-032 DANFSe (DEC-050), que não emite nada.
-- T-021 a T-023 e T-025 têm acceptance criteria "a definir": dependem de ler as regras do Anexo I para cada caso. A T-021 (serviço em outro município) cobre também a obra em outro município, que a T-020 deixou de fora.
-- Open questions sem resposta: Q-17 (guarda de certificados e senhas no produto), Q-18 (como o percentual de `pTotTribSN` entra no sistema), Q-21 (claim sobre o certificado em §2), Q-24 (critério de sucesso do M4). Nenhuma bloqueia trabalho já começado.
-- `[VERIFY]` abertos em §6: API de DANFSe no ADN (T-032), algoritmo do DV do CIB (T-020), procedência dos XSDs, demais regras de negócio do Anexo I, texto vigente do DOC-ICP-04 sobre o CNPJ no certificado, caminho base das demais APIs do ADN.
-- Riscos conhecidos: `dhEmi` vem do relógio local (E0008 se estiver adiantado); a cadeia ICP-Brasil da assinatura do sistema não é conferida; o exemplo usa tomador e serviço fictícios.
+- Revisar e mesclar (ou não) a PR da T-031.
+- Q-26: em que milestone entra a T-034 (grupo IBS/CBS na DPS) e quando começa. Sem ela, nenhuma emissão nova passa na produção restrita, o que bloqueia a T-033 e a T-035.
+- Q-25 (segue aberta para a T-033): chamado no suporte do Portal NFS-e sobre o 500 no registro de evento, ou nova tentativa mais tarde.
+- Q-24: critério de sucesso do M4.
+- Próxima task que pode andar sem decisão nova: T-032 (DANFSe), que só baixa, não emite.
+- Pendente desde 2026-10-12: atualizar o `README.md` (a seção "O que existe hoje" e a árvore estão desatualizadas, e ela cita o `baixar_danfse.py`, que ainda não existe); depende de o humano decidir se §2 ganha claims novos (assina, transmite, emite em produção restrita). Ainda sem task.
+- T-021 a T-023 e T-025 têm acceptance criteria "a definir"; a T-021 cobre também a obra em outro município.
+- Outras open questions sem resposta: Q-17 (guarda de certificados e senhas no produto), Q-18 (percentual de `pTotTribSN`), Q-21 (claim sobre o certificado em §2).
+- `[VERIFY]` abertos em §6: API de DANFSe no ADN (T-032), perfil de assinatura que a SEFIN aceita no pedido de evento, fonte oficial da E0855, algoritmo do DV do CIB e da chave de acesso, procedência dos XSDs, demais regras do Anexo I, DOC-ICP-04, caminho base das demais APIs do ADN.
+- Riscos conhecidos: `dhEmi` e `dhEvento` vêm do relógio local (E0008, E1843 se estiver adiantado); a cadeia ICP-Brasil da assinatura do sistema não é conferida; o exemplo usa tomador e serviço fictícios.
 
 **Outros**
 
 - As branches já mescladas continuam em `origin` por escolha do humano.
-- Regras de trabalho em §0: commits, PRs e branches em inglês; uma PR por task com squash; `done` só a pedido explícito; descrição de PR com as cinco seções da DEC-049; PRs empilhadas depois de um squash recebem merge de `main` (DEC-046).
+- Regras de trabalho em §0: commits, PRs e branches em inglês; uma PR por task com squash; `done` só a pedido explícito, marcado no primeiro commit da próxima task; descrição de PR com as cinco seções da DEC-049; PRs empilhadas depois de um squash recebem merge de `main` (DEC-046).
 
 ### Histórico do ponto de retomada (2026-10-07 e 2026-10-08)
 
@@ -596,6 +607,7 @@ Registro das atualizações anteriores, em ordem. O estado atual é o da seção
 - 2026-10-13: T-030 entrou em `main` pela PR #26 (`5ffda50`) e foi marcada `done` pelo humano (transcrito pelo agente, DEC-007). Branch `t-031-substitute-nfse` aberta; T-031 em `doing`.
 - 2026-10-13: critérios da T-031 revistos contra o Anexo I, o Anexo II e os XSDs e aprovados pelo humano, com o tomador e o valor conferidos (não copiados) e o motivo 99 no teste real (DEC-059); T-031 implementada e em `review`.
 - 2026-10-13: a substituição real da nota 3 foi recusada com E0855 (grupo IBS/CBS obrigatório para competência a partir de 01/10/2026). O humano decidiu fechar a T-031 sem o critério (7), que virou a T-035, e criar a T-034 (grupo IBS/CBS na DPS); a T-033 passou a depender da T-034; Q-26 aberta (DEC-060).
+- 2026-10-13: commit e push da T-031 (`1dfdc4d`); PR aberta, à espera da revisão do humano. Ponto de retomada reescrito para o fim da sessão.
 
 ## §10 Decision log
 
