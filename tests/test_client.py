@@ -2,6 +2,7 @@
 `httpx.MockTransport` e o handshake TLS é feito em memória, com o PFX autoassinado de tests/pfx.py.
 """
 
+import base64
 import json
 import logging
 import ssl
@@ -706,6 +707,69 @@ def test_consultar_evento_devolve_o_xml(cert):
     ]
 
 
+def evento_200_real(*itens) -> httpx.Response:
+    """A forma que a SEFIN real devolveu em 2026-10-13: lista `eventos`, com `arquivoXml` em
+    Base64 do texto GZip+Base64 (Base64 em dobro), em vez de `eventoXmlGZipB64`."""
+    return json_resposta(
+        200,
+        {
+            "dataHoraProcessamento": QUANDO,
+            "tipoAmbiente": 2,
+            "versaoAplicativo": "SefinNacional_1.6.0",
+            "eventos": list(itens),
+        },
+    )
+
+
+def item_evento(xml=EVENTO_XML, *, tipo=101101, numero=1, dobrado=True) -> dict:
+    texto = codificar(xml)
+    if dobrado:
+        texto = base64.b64encode(texto.encode("ascii")).decode("ascii")
+    return {
+        "chaveAcesso": CHAVE,
+        "tipoEvento": tipo,
+        "numeroPedidoRegistroEvento": numero,
+        "dataHoraRecebimento": "2026-10-13T16:37:00.957",
+        "arquivoXml": texto,
+    }
+
+
+@pytest.mark.parametrize("dobrado", [True, False])
+def test_consultar_evento_le_a_lista_eventos_da_sefin_real(cert, dobrado):
+    resposta = evento_200_real(item_evento(dobrado=dobrado))
+    with ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente:
+        assert cliente.consultar_evento(CHAVE, "101101", 1) == EVENTO_XML
+
+
+def test_consultar_evento_escolhe_o_item_do_tipo_e_numero_pedidos(cert):
+    outro = b"<evento>outro</evento>"
+    resposta = evento_200_real(
+        item_evento(outro, tipo=105102), item_evento(outro, numero=2), item_evento()
+    )
+    with ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente:
+        assert cliente.consultar_evento(CHAVE, "101101", 1) == EVENTO_XML
+
+
+@pytest.mark.parametrize(
+    ("corpo", "motivo"),
+    [
+        ({"eventos": []}, "nenhum evento 101101/1 na lista"),
+        ({"eventos": [{"tipoEvento": 101101, "numeroPedidoRegistroEvento": 1}]}, "arquivoXml"),
+        ({"eventos": "x"}, "eventos não é uma lista"),
+        (
+            {"eventos": [dict(item_evento(), arquivoXml="nao-e-base64!")]},
+            "arquivoXml inválido",
+        ),
+    ],
+)
+def test_consultar_evento_lista_fora_do_formato(cert, corpo, motivo):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(json_resposta(200, corpo))) as c,
+        pytest.raises(RespostaInesperada, match=motivo),
+    ):
+        c.consultar_evento(CHAVE, "101101", 1)
+
+
 def test_consultar_evento_sem_evento_devolve_none(cert):
     with ClienteNfse(config(), cert, transporte=transporte(erro_consulta(404))) as cliente:
         assert cliente.consultar_evento(CHAVE, "101101", 1) is None
@@ -760,6 +824,137 @@ def test_consultar_evento_recusa_parametros_fora_do_formato(cert, chave, tipo, s
         pytest.raises(ValueError, match=campo),
     ):
         c.consultar_evento(chave, tipo, seq)
+    assert pedidos == []
+
+
+# --- registro de evento (T-030) --------------------------------------------------------
+
+PEDIDO = (
+    f'<pedRegEvento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01">'
+    f'<infPedReg Id="PRE{CHAVE}101101"><chNFSe>{CHAVE}</chNFSe></infPedReg></pedRegEvento>'
+).encode()
+
+
+def evento_201(**over) -> httpx.Response:
+    corpo = {
+        "tipoAmbiente": 2,
+        "versaoAplicativo": "x",
+        "dataHoraProcessamento": QUANDO,
+        "eventoXmlGZipB64": codificar(EVENTO_XML),
+    }
+    corpo.update(over)
+    return json_resposta(201, corpo)
+
+
+def test_registrar_evento_faz_post_com_o_pedido_em_gzip_base64(cert):
+    pedidos = []
+    with ClienteNfse(config(), cert, transporte=transporte(evento_201(), pedidos)) as cliente:
+        assert cliente.registrar_evento(CHAVE, PEDIDO) == EVENTO_XML
+    [pedido] = pedidos
+    assert (pedido.method, str(pedido.url)) == ("POST", f"{BASE}/nfse/{CHAVE}/eventos")
+    assert pedido.headers["content-type"] == "application/json"
+    corpo = json.loads(pedido.content)
+    assert list(corpo) == ["pedidoRegistroEventoXmlGZipB64"]
+    assert decodificar(corpo["pedidoRegistroEventoXmlGZipB64"]) == PEDIDO
+
+
+@pytest.mark.parametrize("status", [400, 401])
+def test_registrar_evento_rejeitado(cert, status):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(erro_consulta(status, "E0840"))) as c,
+        pytest.raises(RejeicaoApi) as erro,
+    ):
+        c.registrar_evento(CHAVE, PEDIDO)
+    assert erro.value.status == status
+    assert erro.value.mensagens == (MensagemApi("E0840", "fictício", None),)
+    assert erro.value.corpo
+
+
+def test_registrar_evento_rejeitado_com_lista_de_erros(cert):
+    # A especificação diz um objeto `erro`; uma lista `erros`, como no envio da DPS, também vale.
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(erro_post(("E1831", "x")))) as c,
+        pytest.raises(RejeicaoApi) as erro,
+    ):
+        c.registrar_evento(CHAVE, PEDIDO)
+    assert [m.codigo for m in erro.value.mensagens] == ["E1831"]
+
+
+def test_registrar_evento_rejeitado_com_erro_em_lista(cert):
+    # A SEFIN real devolve `erro` como lista no registro de evento, embora a especificação
+    # diga objeto (2026-10-13: E0714 numa lista).
+    corpo = {
+        "tipoAmbiente": 2,
+        "versaoAplicativo": "SefinNacional_1.6.0",
+        "dataHoraProcessamento": QUANDO,
+        "erro": [{"codigo": "E0714", "descricao": "Arquivo enviado com erro na assinatura."}],
+    }
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(json_resposta(400, corpo))) as c,
+        pytest.raises(RejeicaoApi, match="E0714: Arquivo enviado") as erro,
+    ):
+        c.registrar_evento(CHAVE, PEDIDO)
+    assert erro.value.mensagens == (
+        MensagemApi("E0714", "Arquivo enviado com erro na assinatura.", None),
+    )
+
+
+def test_rejeicao_com_erro_em_lista_vazia(cert):
+    corpo = {"tipoAmbiente": 2, "erro": []}
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(json_resposta(400, corpo))) as c,
+        pytest.raises(RejeicaoApi, match="sem mensagens") as erro,
+    ):
+        c.registrar_evento(CHAVE, PEDIDO)
+    assert erro.value.mensagens == ()
+
+
+@pytest.mark.parametrize(
+    ("resposta", "motivo"),
+    [
+        (httpx.Response(201, content=b"<html/>"), "corpo não é JSON"),
+        (evento_201(eventoXmlGZipB64="nao-e-base64!"), "eventoXmlGZipB64 inválido"),
+        (evento_201(eventoXmlGZipB64=None), "eventoXmlGZipB64 ausente"),
+        (httpx.Response(500, json={}), "HTTP 500 não previsto"),
+        (httpx.Response(200, json={}), "HTTP 200 não previsto"),
+    ],
+)
+def test_registrar_evento_resposta_inesperada(cert, resposta, motivo):
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(resposta)) as cliente,
+        pytest.raises(RespostaInesperada, match=motivo) as erro,
+    ):
+        cliente.registrar_evento(CHAVE, PEDIDO)
+    assert erro.value.corpo == resposta.content
+
+
+def test_registrar_evento_erro_de_conexao(cert):
+    falha = httpx.ReadTimeout("tempo esgotado (simulado)")
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(falha)) as cliente,
+        pytest.raises(ErroConexao, match="ReadTimeout"),
+    ):
+        cliente.registrar_evento(CHAVE, PEDIDO)
+
+
+@pytest.mark.parametrize(
+    ("chave", "pedido", "erro", "texto"),
+    [
+        ("123", PEDIDO, ValueError, "chave de acesso"),
+        ("4" * 50, PEDIDO, ValueError, "chNFSe"),
+        (CHAVE, PEDIDO.replace(f"<chNFSe>{CHAVE}".encode(), b"<chNFSe>"), ValueError, "chNFSe"),
+        (CHAVE, b"nao e xml", ValueError, "XML bem formado"),
+        (CHAVE, b"<outra/>", ValueError, "pedRegEvento"),
+        (CHAVE, PEDIDO.decode(), TypeError, "bytes"),
+    ],
+)
+def test_registrar_evento_recusa_antes_de_enviar(cert, chave, pedido, erro, texto):
+    pedidos = []
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(evento_201(), pedidos)) as c,
+        pytest.raises(erro, match=texto),
+    ):
+        c.registrar_evento(chave, pedido)
     assert pedidos == []
 
 

@@ -23,7 +23,12 @@ def _sub(pai, nome: str, texto: str | None = None):
 
 
 def gerar_evento(
-    *, chave: str = CHAVE, tipo: str = CANCELAMENTO, tp_amb: str = "2", assinar: bool = True
+    *,
+    chave: str = CHAVE,
+    tipo: str = CANCELAMENTO,
+    tp_amb: str = "2",
+    assinar: bool = True,
+    id_pedido: str | None = None,
 ) -> bytes:
     raiz = etree.Element(f"{{{NS}}}evento", nsmap={None: NS}, versao="1.01")
     inf = _sub(raiz, "infEvento")
@@ -38,7 +43,7 @@ def gerar_evento(
     ped = _sub(inf, "pedRegEvento")
     ped.set("versao", "1.01")
     inf_ped = _sub(ped, "infPedReg")
-    inf_ped.set("Id", f"PRE{chave}{tipo}")
+    inf_ped.set("Id", id_pedido or f"PRE{chave}{tipo}")
     _sub(inf_ped, "tpAmb", tp_amb)
     _sub(inf_ped, "verAplic", "Ficticio_1.0")
     _sub(inf_ped, "dhEvento", "2026-10-12T10:59:00-03:00")

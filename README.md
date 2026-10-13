@@ -175,6 +175,15 @@ Para consultar em produção restrita uma NFS-e do emitente pela chave de acesso
 
 O script só lê. Antes de qualquer pedido, ele recusa uma chave que não seja de nota do emitente (o CNPJ fica nas posições 10 a 23 da chave). A NFS-e vai para `out\NFSe<chave>-consulta.xml` e é conferida (XSD, Id, ambiente e assinatura do sistema). Com `--evento` (código de 6 dígitos; `101101` é o cancelamento) e `--seq` (padrão `1`), consulta também o evento, grava `out\Evento<chave>-<tipo>-<seq>.xml` e o confere; se a nota não tiver esse evento, ele avisa, e isso não é erro. Mostra só a chave, o número e o `cStat` da nota. Os códigos de saída são os do `emitir.py`: `0` consultada e conferida, `1` erro antes da consulta (inclusive chave de outro emitente), `3` erro de rede, `4` a SEFIN recusou a consulta, `7` algo não bateu na conferência (o arquivo é salvo mesmo assim), `8` resposta fora do formato esperado.
 
+Para cancelar em produção restrita uma NFS-e do emitente (evento 101101). **O cancelamento não volta atrás**: sem `--confirmar`, nada é enviado.
+
+```powershell
+.\.venv\Scripts\python.exe scripts\cancelar.py --emitente minha-empresa --chave <chave> --motivo 1 --descricao "Erro na emissão da nota de teste"
+.\.venv\Scripts\python.exe scripts\cancelar.py --emitente minha-empresa --chave <chave> --motivo 1 --descricao "Erro na emissão da nota de teste" --confirmar
+```
+
+`--motivo` é `1` (Erro na Emissão), `2` (Serviço não Prestado) ou `9` (Outros); `--descricao` tem de 15 a 255 caracteres, sem travessão, aspas curvas nem emoji. Antes de tudo, o script recusa uma chave que não seja de nota do emitente. Ele monta o pedido, valida contra o XSD, assina, confere e grava `out\PRE<chave>101101-assinado.xml`. Com `--confirmar`, consulta antes se a nota já foi cancelada, envia uma vez, confere o evento devolvido e o grava em `out\Evento<chave>-101101-1.xml`; na recusa, mostra os códigos, uma dica para os mais comuns (prazo do município, outro evento vinculado, relógio adiantado) e grava a resposta bruta em `out\`. Os códigos de saída são os do `emitir.py`: `0` cancelada e conferida (ou, sem `--confirmar`, pedido assinado e gravado), `1` erro antes do envio, `3` erro de rede sem cancelamento (pode enviar de novo), `4` a SEFIN recusou, `5` a nota já estava cancelada, `6` incerto (não reenvie; consulte com `consultar_nfse.py --evento 101101`), `7` algo não bateu na conferência, `8` resposta fora do formato esperado.
+
 ## Testar
 
 ```powershell

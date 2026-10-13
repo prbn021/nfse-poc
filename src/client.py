@@ -2,11 +2,13 @@
 
 Único módulo de src/ e de scripts/ que faz I/O de rede (B-2). Abre a conexão com o
 certificado do emitente, envia a DPS assinada (`POST /nfse`) e consulta DPS e NFS-e (T-007,
-DEC-036). Não repete pedidos: a política de envio fica em `src/emissao.py`.
+DEC-036), e registra eventos da NFS-e (T-030). Não repete pedidos: a política de envio fica em
+`src/emissao.py` e `src/cancelamento.py`.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -19,10 +21,12 @@ from urllib.parse import urlsplit
 
 import httpx
 from cryptography.hazmat.primitives import serialization
+from lxml import etree
 
 from src.certificado import Certificado
 from src.codec import codificar, decodificar
 from src.config import Config
+from src.dps import NS
 from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
 from src.nfse import NfseEmitida
 
@@ -249,13 +253,41 @@ class ClienteNfse:
         resposta = self._pedir("GET", f"nfse/{chave}/eventos/{tipo}/{seq}")
         with _anexar_corpo(resposta):
             if resposta.status == 200:
-                return _evento_xml(resposta.status, _objeto_json(resposta))
+                return _evento_consultado(resposta.status, _objeto_json(resposta), tipo, seq)
             if resposta.status == 404:
                 return None
             if resposta.status in (401, 422):
                 raise _rejeicao(resposta)
             raise RespostaInesperada(
                 resposta.status, f"HTTP {resposta.status} não previsto na consulta de eventos"
+            )
+
+    def registrar_evento(self, chave: str, pedido_assinado: bytes) -> bytes:
+        """`POST /nfse/{chave}/eventos` com o pedido assinado em GZip+Base64; devolve o XML do
+        evento registrado, já decodificado (T-030).
+
+        Não repete o envio em caso de falha: quem decide é `src/cancelamento.py`.
+        """
+        if not isinstance(pedido_assinado, bytes):
+            raise TypeError(
+                f"registrar_evento espera bytes, recebido: {type(pedido_assinado).__name__}"
+            )
+        if not _CHAVE.fullmatch(chave):
+            raise ValueError("chave de acesso fora do formato: 50 dígitos")
+        if _chave_do_pedido(pedido_assinado) != chave:
+            raise ValueError("o chNFSe do pedido não é a chave da rota: nada enviado")
+        resposta = self._pedir(
+            "POST",
+            f"nfse/{chave}/eventos",
+            corpo_json={"pedidoRegistroEventoXmlGZipB64": codificar(pedido_assinado)},
+        )
+        with _anexar_corpo(resposta):
+            if resposta.status == 201:
+                return _evento_xml(resposta.status, _objeto_json(resposta))
+            if resposta.status in (400, 401):
+                raise _rejeicao(resposta)
+            raise RespostaInesperada(
+                resposta.status, f"HTTP {resposta.status} não previsto no registro do evento"
             )
 
     def convenio(self, municipio: str) -> ConsultaParametros:
@@ -357,6 +389,20 @@ def _nfse_xml(status: int, corpo: dict) -> bytes:
     raise RespostaInesperada(status, motivo)
 
 
+def _chave_do_pedido(xml: bytes) -> str | None:
+    """O `chNFSe` do pedido de registro de evento."""
+    parser = etree.XMLParser(resolve_entities=False, no_network=True)
+    try:
+        raiz = etree.fromstring(xml, parser)
+    except (etree.XMLSyntaxError, ValueError):
+        raiz = None
+    if raiz is None:
+        raise ValueError("o pedido não é XML bem formado: nada enviado")
+    if raiz.tag != f"{{{NS}}}pedRegEvento":
+        raise ValueError(f"raiz do pedido não é pedRegEvento no namespace {NS}: nada enviado")
+    return raiz.findtext(f"{{{NS}}}infPedReg/{{{NS}}}chNFSe")
+
+
 def _evento_xml(status: int, corpo: dict) -> bytes:
     texto = corpo.get("eventoxmlgzipb64")
     if not isinstance(texto, str):
@@ -365,6 +411,49 @@ def _evento_xml(status: int, corpo: dict) -> bytes:
         return decodificar(texto)
     except ValueError as erro:
         motivo = f"eventoXmlGZipB64 inválido: {erro}"
+    raise RespostaInesperada(status, motivo)
+
+
+def _evento_consultado(status: int, corpo: dict, tipo: str, seq: int) -> bytes:
+    """O evento da consulta `GET /nfse/{chave}/eventos/{tipo}/{seq}`.
+
+    A especificação descreve `eventoXmlGZipB64`, mas a SEFIN real devolveu em 2026-10-13 uma
+    lista `eventos`, com `tipoEvento`, `numeroPedidoRegistroEvento` e `arquivoXml` em Base64 do
+    texto GZip+Base64 (Base64 em dobro) (T-030, DEC-057). As duas formas são lidas; na lista,
+    vale o item do tipo e do número pedidos.
+    """
+    if "eventoxmlgzipb64" in corpo or "eventos" not in corpo:
+        return _evento_xml(status, corpo)
+    lista = corpo["eventos"]
+    if not isinstance(lista, list):
+        raise RespostaInesperada(status, "eventos não é uma lista")
+    for item in lista:
+        if not isinstance(item, dict):
+            continue
+        campos = {chave.lower(): valor for chave, valor in item.items() if isinstance(chave, str)}
+        if str(campos.get("tipoevento")) != tipo:
+            continue
+        if str(campos.get("numeropedidoregistroevento")) != str(seq):
+            continue
+        texto = campos.get("arquivoxml")
+        if not isinstance(texto, str):
+            raise RespostaInesperada(status, "arquivoXml ausente no item da lista eventos")
+        return _arquivo_xml(status, texto)
+    raise RespostaInesperada(status, f"nenhum evento {tipo}/{seq} na lista eventos")
+
+
+def _arquivo_xml(status: int, texto: str) -> bytes:
+    """`arquivoXml`: GZip+Base64, ou o Base64 desse texto, como a SEFIN real devolve."""
+    try:
+        interno = base64.b64decode(texto, validate=True)
+    except ValueError:
+        interno = b""
+    if interno.startswith(b"H4sI"):  # Base64 de um GZip: o Base64 veio em dobro
+        texto = interno.decode("ascii")
+    try:
+        return decodificar(texto)
+    except ValueError as erro:
+        motivo = f"arquivoXml inválido: {erro}"
     raise RespostaInesperada(status, motivo)
 
 
@@ -414,9 +503,12 @@ def _anexar_corpo(resposta: Resposta):
 
 def _rejeicao(resposta: Resposta) -> RejeicaoApi:
     corpo = _objeto_json(resposta)
-    # O envio devolve uma lista `erros`; as consultas, um objeto `erro` só.
+    # O envio devolve uma lista `erros`; as consultas, um objeto `erro` só; o registro de
+    # evento, uma lista em `erro`, embora a especificação diga objeto (T-030, 2026-10-13).
     if "erros" in corpo:
         mensagens = _mensagens(resposta.status, corpo["erros"], "erros")
+    elif isinstance(corpo.get("erro"), list):
+        mensagens = _mensagens(resposta.status, corpo["erro"], "erro")
     else:
         mensagens = _mensagens(resposta.status, [corpo["erro"]] if "erro" in corpo else [], "erro")
     id_dps = corpo.get("iddps")

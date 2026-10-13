@@ -143,11 +143,14 @@ def _ler(xml: bytes) -> etree._Element | None:
     return raiz if raiz.tag == f"{{{NS}}}evento" else None
 
 
-def conferir_evento(xml: bytes, *, chave: str, tipo: str, xsd: Path) -> list[str]:
+def conferir_evento(
+    xml: bytes, *, chave: str, tipo: str, xsd: Path, id_pedido: str | None = None
+) -> list[str]:
     """Lista o que não bate no evento consultado; vazia quando está tudo certo.
 
     `tipo` é o código do evento pedido, 6 dígitos (ex.: "101101", cancelamento): o grupo
-    específico do pedido de registro se chama `e<tipo>`.
+    específico do pedido de registro se chama `e<tipo>`. Com `id_pedido`, confere também se o
+    pedido dentro do evento é o que foi enviado (T-030).
     """
     raiz = _ler(xml)
     if raiz is None:
@@ -166,6 +169,8 @@ def conferir_evento(xml: bytes, *, chave: str, tipo: str, xsd: Path) -> list[str
         problemas.append(f"o evento não é do tipo pedido ({tipo})")
     elif pedido.findtext("n:tpAmb", namespaces=_N) != _HOMOLOGACAO:
         problemas.append("tpAmb do evento não é 2 (produção restrita)")
+    if id_pedido is not None and pedido is not None and pedido.get("Id") != id_pedido:
+        problemas.append("o evento não é do pedido enviado (Id do pedido diferente)")
 
     try:
         conferir_assinatura_do_sistema(xml)
