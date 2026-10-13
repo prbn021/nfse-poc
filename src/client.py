@@ -459,9 +459,12 @@ def _anexar_corpo(resposta: Resposta):
 
 def _rejeicao(resposta: Resposta) -> RejeicaoApi:
     corpo = _objeto_json(resposta)
-    # O envio devolve uma lista `erros`; as consultas, um objeto `erro` só.
+    # O envio devolve uma lista `erros`; as consultas, um objeto `erro` só; o registro de
+    # evento, uma lista em `erro`, embora a especificação diga objeto (T-030, 2026-10-13).
     if "erros" in corpo:
         mensagens = _mensagens(resposta.status, corpo["erros"], "erros")
+    elif isinstance(corpo.get("erro"), list):
+        mensagens = _mensagens(resposta.status, corpo["erro"], "erro")
     else:
         mensagens = _mensagens(resposta.status, [corpo["erro"]] if "erro" in corpo else [], "erro")
     id_dps = corpo.get("iddps")

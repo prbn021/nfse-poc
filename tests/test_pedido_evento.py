@@ -32,7 +32,7 @@ from tests.pfx import CNPJ, chave_de_teste, gerar_certificado
 
 DS = "http://www.w3.org/2000/09/xmldsig#"
 N = {"n": NS, "ds": DS}
-EXC_C14N_COM_COMENTARIOS = "http://www.w3.org/2001/10/xml-exc-c14n#WithComments"
+EXC_C14N = "http://www.w3.org/2001/10/xml-exc-c14n#"
 ENVELOPED = "http://www.w3.org/2000/09/xmldsig#enveloped-signature"
 RSA_SHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
 SHA256 = "http://www.w3.org/2001/04/xmlenc#sha256"
@@ -267,16 +267,18 @@ def test_sem_prefixo_de_namespace(assinado):
     assert b"xmlns:" not in assinado
 
 
-def test_perfil_igual_ao_da_dps(assinado):
+def test_perfil_do_pedido(assinado):
+    # Como o da DPS, mas com exc-c14n sem comentários: com comentários, a SEFIN respondeu
+    # HTTP 500 sem códigos aos dois primeiros cancelamentos reais (T-030, DEC-054).
     sig = etree.fromstring(assinado).find("ds:Signature", N)
     algoritmos = lambda caminho, raiz=sig: [el.get("Algorithm") for el in raiz.findall(caminho, N)]  # noqa: E731
-    assert algoritmos("ds:SignedInfo/ds:CanonicalizationMethod") == [EXC_C14N_COM_COMENTARIOS]
+    assert algoritmos("ds:SignedInfo/ds:CanonicalizationMethod") == [EXC_C14N]
     assert algoritmos("ds:SignedInfo/ds:SignatureMethod") == [RSA_SHA256]
     referencias = sig.findall("ds:SignedInfo/ds:Reference", N)
     assert [r.get("URI") for r in referencias] == [f"#{ID}"]
     assert algoritmos("ds:Transforms/ds:Transform", referencias[0]) == [
         ENVELOPED,
-        EXC_C14N_COM_COMENTARIOS,
+        EXC_C14N,
     ]
     assert algoritmos("ds:DigestMethod", referencias[0]) == [SHA256]
     key_info = sig.find("ds:KeyInfo", N)
@@ -298,7 +300,7 @@ def test_conferir_assinatura_aceita_o_pedido(assinado, cert):
     [
         (b"<cMotivo>1<", b"<cMotivo>2<"),
         (b"nota de teste<", b"nota de testE<"),
-        (b"<tpAmb>2</tpAmb>", b"<tpAmb>2</tpAmb><!-- x -->"),
+        (b"<tpAmb>2</tpAmb>", b"<tpAmb>1</tpAmb>"),
     ],
 )
 def test_alterar_o_infpedreg_invalida_a_assinatura(assinado, cert, de, para):
@@ -308,6 +310,15 @@ def test_alterar_o_infpedreg_invalida_a_assinatura(assinado, cert, de, para):
         _verificar(adulterado, cert)
     with pytest.raises(ValueError, match="assinatura inválida"):
         conferir_assinatura(adulterado, cert.certificado)
+
+
+def test_comentario_fica_fora_da_assinatura(assinado, cert):
+    # Consequência da canonicalização sem comentários (DEC-054): um comentário inserido no
+    # infPedReg não muda o que foi assinado. O conteúdo continua protegido (teste acima).
+    com_comentario = assinado.replace(b"<tpAmb>2</tpAmb>", b"<tpAmb>2</tpAmb><!-- x -->", 1)
+    assert com_comentario != assinado
+    _verificar(com_comentario, cert)
+    conferir_assinatura(com_comentario, cert.certificado)
 
 
 def test_mesma_entrada_gera_a_mesma_saida(xml, cert, assinado):

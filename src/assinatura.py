@@ -5,7 +5,8 @@ DPS na T-005 (DEC-035); pedido de registro de evento na T-029 (DEC-052).
 O perfil é o da assinatura que o próprio sistema nacional põe na NFS-e (docs/SPEC.md §6):
 rsa-sha256, sha256 e canonicalização exclusiva com comentários, referência ao `Id` do
 elemento assinado (`infDPS` ou `infPedReg`). A SEFIN aceitou esse perfil na DPS em
-2026-10-12 (§6); no pedido de evento, só o primeiro cancelamento o confirma (T-030).
+2026-10-12 (§6). No pedido de evento, a canonicalização é sem comentários: com comentários,
+a SEFIN respondeu HTTP 500 sem códigos aos dois primeiros cancelamentos reais (T-030, DEC-054).
 
 A `Signature` sai sem prefixo de namespace, porque a recepção recusa prefixos na área de
 dados (E1228). Nenhuma mensagem de erro traz chave, conteúdo do certificado ou trecho do
@@ -37,6 +38,7 @@ from src.dps import NS
 
 # Se a SEFIN recusar a assinatura (E0714), a canonicalização é o primeiro ponto a revisar.
 C14N = CanonicalizationMethod.EXCLUSIVE_XML_CANONICALIZATION_1_0_WITH_COMMENTS
+C14N_PEDIDO_EVENTO = CanonicalizationMethod.EXCLUSIVE_XML_CANONICALIZATION_1_0
 ASSINATURA = SignatureMethod.RSA_SHA256
 DIGEST = DigestAlgorithm.SHA256
 
@@ -60,6 +62,7 @@ class _Documento:
     outro_cnpj: str
     ja_assinado: str
     falha: str
+    c14n: CanonicalizationMethod = C14N
 
 
 _DPS = _Documento(
@@ -90,6 +93,7 @@ _PEDIDO_EVENTO = _Documento(
     ),
     ja_assinado="pedido de evento já está assinado",
     falha="falha ao assinar o pedido de evento",
+    c14n=C14N_PEDIDO_EVENTO,
 )
 
 
@@ -125,7 +129,9 @@ def _assinar(xml: bytes, cert: Certificado, doc: _Documento) -> bytes:
     if not isinstance(cert.chave, rsa.RSAPrivateKey):
         raise ValueError("a chave do certificado não é RSA; o perfil usa rsa-sha256")
 
-    signer = XMLSigner(signature_algorithm=ASSINATURA, digest_algorithm=DIGEST, c14n_algorithm=C14N)
+    signer = XMLSigner(
+        signature_algorithm=ASSINATURA, digest_algorithm=DIGEST, c14n_algorithm=doc.c14n
+    )
     signer.namespaces = {None: _DS}
     try:
         assinada = signer.sign(
@@ -150,7 +156,8 @@ def assinar_dps(xml: bytes, cert: Certificado) -> bytes:
 
 
 def assinar_pedido_evento(xml: bytes, cert: Certificado) -> bytes:
-    """Assina o `infPedReg` do pedido de registro de evento, com o mesmo perfil da DPS.
+    """Assina o `infPedReg` do pedido de registro de evento, com o perfil da DPS, mas
+    canonicalização exclusiva sem comentários (T-030, DEC-054).
 
     A `Signature` sai depois do `infPedReg`, em UTF-8 (T-029, DEC-052).
     """

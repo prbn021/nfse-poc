@@ -816,6 +816,35 @@ def test_registrar_evento_rejeitado_com_lista_de_erros(cert):
     assert [m.codigo for m in erro.value.mensagens] == ["E1831"]
 
 
+def test_registrar_evento_rejeitado_com_erro_em_lista(cert):
+    # A SEFIN real devolve `erro` como lista no registro de evento, embora a especificação
+    # diga objeto (2026-10-13: E0714 numa lista).
+    corpo = {
+        "tipoAmbiente": 2,
+        "versaoAplicativo": "SefinNacional_1.6.0",
+        "dataHoraProcessamento": QUANDO,
+        "erro": [{"codigo": "E0714", "descricao": "Arquivo enviado com erro na assinatura."}],
+    }
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(json_resposta(400, corpo))) as c,
+        pytest.raises(RejeicaoApi, match="E0714: Arquivo enviado") as erro,
+    ):
+        c.registrar_evento(CHAVE, PEDIDO)
+    assert erro.value.mensagens == (
+        MensagemApi("E0714", "Arquivo enviado com erro na assinatura.", None),
+    )
+
+
+def test_rejeicao_com_erro_em_lista_vazia(cert):
+    corpo = {"tipoAmbiente": 2, "erro": []}
+    with (
+        ClienteNfse(config(), cert, transporte=transporte(json_resposta(400, corpo))) as c,
+        pytest.raises(RejeicaoApi, match="sem mensagens") as erro,
+    ):
+        c.registrar_evento(CHAVE, PEDIDO)
+    assert erro.value.mensagens == ()
+
+
 @pytest.mark.parametrize(
     ("resposta", "motivo"),
     [
