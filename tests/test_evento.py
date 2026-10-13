@@ -71,3 +71,22 @@ def test_evento_fora_do_xsd(xsd):
 def test_conteudo_que_nao_e_evento(xml, xsd):
     problemas = conferir_evento(xml, chave=CHAVE, tipo=CANCELAMENTO, xsd=xsd)
     assert problemas == ["o retorno não é um evento em XML"]
+
+
+# --- Id do pedido dentro do evento (T-030) ----------------------------------------------
+
+ID_PEDIDO = f"PRE{CHAVE}{CANCELAMENTO}"
+
+
+def test_evento_do_pedido_enviado_nao_tem_problemas(evento, xsd):
+    problemas = conferir_evento(
+        evento, chave=CHAVE, tipo=CANCELAMENTO, xsd=xsd, id_pedido=ID_PEDIDO
+    )
+    assert problemas == []
+
+
+def test_evento_de_outro_pedido(xsd):
+    # Outro Id, válido no XSD, com a mesma chave e o mesmo tipo.
+    outro = gerar_evento(id_pedido=f"PRE{'1' * 56}")
+    problemas = conferir_evento(outro, chave=CHAVE, tipo=CANCELAMENTO, xsd=xsd, id_pedido=ID_PEDIDO)
+    assert "o evento não é do pedido enviado (Id do pedido diferente)" in problemas

@@ -2,7 +2,8 @@
 
 Único módulo de src/ e de scripts/ que faz I/O de rede (B-2). Abre a conexão com o
 certificado do emitente, envia a DPS assinada (`POST /nfse`) e consulta DPS e NFS-e (T-007,
-DEC-036). Não repete pedidos: a política de envio fica em `src/emissao.py`.
+DEC-036), e registra eventos da NFS-e (T-030). Não repete pedidos: a política de envio fica em
+`src/emissao.py` e `src/cancelamento.py`.
 """
 
 from __future__ import annotations
@@ -19,10 +20,12 @@ from urllib.parse import urlsplit
 
 import httpx
 from cryptography.hazmat.primitives import serialization
+from lxml import etree
 
 from src.certificado import Certificado
 from src.codec import codificar, decodificar
 from src.config import Config
+from src.dps import NS
 from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
 from src.nfse import NfseEmitida
 
@@ -258,6 +261,34 @@ class ClienteNfse:
                 resposta.status, f"HTTP {resposta.status} não previsto na consulta de eventos"
             )
 
+    def registrar_evento(self, chave: str, pedido_assinado: bytes) -> bytes:
+        """`POST /nfse/{chave}/eventos` com o pedido assinado em GZip+Base64; devolve o XML do
+        evento registrado, já decodificado (T-030).
+
+        Não repete o envio em caso de falha: quem decide é `src/cancelamento.py`.
+        """
+        if not isinstance(pedido_assinado, bytes):
+            raise TypeError(
+                f"registrar_evento espera bytes, recebido: {type(pedido_assinado).__name__}"
+            )
+        if not _CHAVE.fullmatch(chave):
+            raise ValueError("chave de acesso fora do formato: 50 dígitos")
+        if _chave_do_pedido(pedido_assinado) != chave:
+            raise ValueError("o chNFSe do pedido não é a chave da rota: nada enviado")
+        resposta = self._pedir(
+            "POST",
+            f"nfse/{chave}/eventos",
+            corpo_json={"pedidoRegistroEventoXmlGZipB64": codificar(pedido_assinado)},
+        )
+        with _anexar_corpo(resposta):
+            if resposta.status == 201:
+                return _evento_xml(resposta.status, _objeto_json(resposta))
+            if resposta.status in (400, 401):
+                raise _rejeicao(resposta)
+            raise RespostaInesperada(
+                resposta.status, f"HTTP {resposta.status} não previsto no registro do evento"
+            )
+
     def convenio(self, municipio: str) -> ConsultaParametros:
         """`GET /parametrizacao/{municipio}/convenio` no ADN (T-026)."""
         self._conferir_parametros(municipio)
@@ -355,6 +386,20 @@ def _nfse_xml(status: int, corpo: dict) -> bytes:
     except ValueError as erro:
         motivo = f"nfseXmlGZipB64 inválido: {erro}"
     raise RespostaInesperada(status, motivo)
+
+
+def _chave_do_pedido(xml: bytes) -> str | None:
+    """O `chNFSe` do pedido de registro de evento."""
+    parser = etree.XMLParser(resolve_entities=False, no_network=True)
+    try:
+        raiz = etree.fromstring(xml, parser)
+    except (etree.XMLSyntaxError, ValueError):
+        raiz = None
+    if raiz is None:
+        raise ValueError("o pedido não é XML bem formado: nada enviado")
+    if raiz.tag != f"{{{NS}}}pedRegEvento":
+        raise ValueError(f"raiz do pedido não é pedRegEvento no namespace {NS}: nada enviado")
+    return raiz.findtext(f"{{{NS}}}infPedReg/{{{NS}}}chNFSe")
 
 
 def _evento_xml(status: int, corpo: dict) -> bytes:
