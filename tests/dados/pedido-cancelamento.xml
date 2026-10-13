@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<pedRegEvento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01"><infPedReg Id="PRE33045572211222333000181000000000000000000000000000101101"><tpAmb>2</tpAmb><verAplic>nfse-poc-0.1</verAplic><dhEvento>2026-10-13T10:00:00-03:00</dhEvento><CNPJAutor>11222333000181</CNPJAutor><chNFSe>33045572211222333000181000000000000000000000000000</chNFSe><e101101><xDesc>Cancelamento de NFS-e</xDesc><cMotivo>1</cMotivo><xMotivo>Erro na emissão da nota de teste</xMotivo></e101101></infPedReg></pedRegEvento>
