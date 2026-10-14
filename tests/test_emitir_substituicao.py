@@ -186,7 +186,10 @@ def test_tomador_ou_valor_diferentes_nao_envia(emitentes, tmp_path, capsys, camp
     servidor = ServidorSubst(_nfse_original(emitentes, **mudanca))
     assert rodar(emitentes, tmp_path, servidor, *MOTIVO_99) == 1
     assert _sem_post(servidor)
-    assert "E0061" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    # Anexo I (E0061) e Anexo VI (E0063) numeram a mesma trava de forma diferente (T-037).
+    assert "E0061" in err
+    assert "E0063" in err
 
 
 def test_nota_substituida_com_problema_na_conferencia(emitentes, tmp_path, capsys):  # noqa: F811
