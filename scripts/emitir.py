@@ -10,8 +10,9 @@ Não mostra senha, chave nem conteúdo do certificado (INV-05).
 
 Com --substituir (T-031), a DPS leva o grupo subst. Antes de enviar, consulta a nota
 substituída: recusa a que não confere, a já cancelada ou substituída (E0046) e a de outro
-tomador ou valor (E0061), e copia dela a data de competência (E0061). Depois da emissão,
-consulta e confere o evento 105102 que a SEFIN registra na nota substituída.
+tomador ou valor (E0061/E0063), e copia dela a data de competência (E0061/E0063). Depois da
+emissão, consulta e confere o evento 105102 que a SEFIN registra na nota substituída.
+E0061 é a regra do Anexo I e E0063 a do Anexo VI (NT 009) para a mesma trava (T-037).
 """
 
 import argparse
@@ -76,7 +77,7 @@ class _Recusa(Exception):
 
 
 def _preparar_substituicao(cliente: ClienteNfse, dps: Dps, xsd_nfse: Path) -> Dps:
-    """Consulta a nota substituída e devolve a DPS com a competência dela (E0061)."""
+    """Consulta a nota substituída e devolve a DPS com a competência dela (E0061/E0063)."""
     chave = dps.subst.chave
     try:
         original = cliente.obter_nfse(chave)
@@ -110,7 +111,7 @@ def _preparar_substituicao(cliente: ClienteNfse, dps: Dps, xsd_nfse: Path) -> Dp
         raise _Recusa(
             1,
             "o tomador ou o valor do serviço da DPS diferem dos da nota substituída; para ME/EPP "
-            "eles não podem mudar na substituição (E0061)",
+            "eles não podem mudar na substituição (E0061 do Anexo I, E0063 do Anexo VI)",
         )
     print(f"Competência copiada da nota substituída: {resumo.d_compet.isoformat()}")
     return dataclasses.replace(dps, d_compet=resumo.d_compet)

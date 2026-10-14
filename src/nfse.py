@@ -31,7 +31,7 @@ class NfseEmitida:
 
 @dataclass(frozen=True)
 class ResumoDps:
-    """O que a substituta de uma nota ME/EPP não pode mudar (E0061; T-031)."""
+    """O que a substituta de uma nota ME/EPP não pode mudar (E0061/E0063; T-031, T-037)."""
 
     d_compet: date
     tomador: str | None  # CPF ou CNPJ; None sem tomador identificado
