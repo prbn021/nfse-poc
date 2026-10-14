@@ -82,6 +82,27 @@ _C_CIB = 8  # TSCodCIB: 7 caracteres + DV (E0373, conferido só pelo servidor)
 _C_OBRA_MAX = 30  # TSCodObra
 _INSC_IMOB_FISC_MAX = 30  # TSInscImobFisc
 
+# Grupo IBS/CBS (T-034, DEC-069). Anexo VI v1.04.01 (NT 009), regras 690 e 692: o grupo só
+# é permitido a partir da competência 01/01/2026 (E0850) e é obrigatório a partir de
+# 01/10/2026 (E0855), também para ME/EPP (a produção restrita recusa; DEC-060, DEC-069).
+IBSCBS_PERMITIDO_DESDE = date(2026, 1, 1)
+IBSCBS_OBRIGATORIO_DESDE = date(2026, 10, 1)
+# cIndOp com indNFSe = "S" no Anexo VII v1.03.00 (NT 009), em gov-docs/; os demais são de
+# NF-e, de NFS-e Via ou sem documento, e a SEFIN os recusa (E0901).
+C_IND_OP_NFSE = frozenset([
+    "010101", "010102", "010103", "010106", "020101", "020102", "020201", "020202",
+    "020301", "020401", "030101", "030102", "040101", "050101", "050102", "050201",
+    "060101", "070101", "070102", "100101", "100102", "100201", "100301", "100302",
+    "100401", "100501", "100502", "100601",
+])  # fmt: skip
+# Anexo VI, E0932 e E0928: estes cIndOp exigem o grupo imovel, que o modelo ainda não
+# tem, exceto nos subitens de obra abaixo (a lista da regra, sem os 14.14).
+C_IND_OP_IMOVEL = frozenset(["020101", "020201", "020202", "020301", "020401"])
+CODIGOS_DE_OBRA_SEM_IMOVEL = CODIGOS_DE_OBRA - {"141403", "141404"}
+_C_TRIB_NAC_IMOVEL = "9903"  # 99.03: cIndOp obrigatoriamente 02XXXX (E0902)
+_C_IND_OP = re.compile(r"[0-9]{6}")  # TSRTCCodIndOp
+_C_CLASS_TRIB = re.compile(r"[0-9]{6}")  # TSRTCCodClassTrib
+
 
 def fone_valido(fone: object) -> bool:
     return isinstance(fone, str) and _FONE.fullmatch(fone) is not None
@@ -311,6 +332,44 @@ class Valores:
             )
 
 
+@dataclass(frozen=True)
+class IbsCbs:
+    """Grupo IBSCBS mínimo da DPS (TCRTCInfoIBSCBS; T-034, DEC-069).
+
+    Só o enquadramento da operação: os valores de IBS e CBS são calculados pela SEFIN.
+    `finNFSe` sai sempre 0 (NFS-e regular, único valor do XSD) e `indDest` sempre 0 (o
+    destinatário é o tomador; o grupo dest ainda não é suportado). Os códigos variam pelo
+    serviço e pela operação (Anexo VIII), por isso são dados da nota, sem default.
+    """
+
+    c_ind_op: str  # código indicador da operação (Anexo VII)
+    c_class_trib: str  # classificação tributária; os 3 primeiros dígitos são o CST (E0959)
+    ind_final: int | None = None  # 1 = uso ou consumo pessoal (art. 57)
+
+    def __post_init__(self):
+        if not isinstance(self.c_ind_op, str) or not _C_IND_OP.fullmatch(self.c_ind_op):
+            raise ValueError(f"ibs_cbs.c_ind_op deve ter 6 dígitos, recebido: {self.c_ind_op!r}")
+        if self.c_ind_op not in C_IND_OP_NFSE:
+            raise ValueError(
+                f"cIndOp {self.c_ind_op} não é aceito na NFS-e: use um código do Anexo VII "
+                "marcado para NFS-e (E0901)"
+            )
+        if not isinstance(self.c_class_trib, str) or not _C_CLASS_TRIB.fullmatch(self.c_class_trib):
+            raise ValueError(
+                f"ibs_cbs.c_class_trib deve ter 6 dígitos, recebido: {self.c_class_trib!r}"
+            )
+        valor = self.ind_final
+        if valor is not None and (
+            isinstance(valor, bool) or not isinstance(valor, int) or valor not in (0, 1)
+        ):
+            raise ValueError(f"ibs_cbs.ind_final deve ser 0 ou 1, recebido: {valor!r}")
+
+    @property
+    def cst(self) -> str:
+        """CST do IBS e da CBS: os 3 primeiros dígitos do cClassTrib (E0959)."""
+        return self.c_class_trib[:3]
+
+
 # Substituição (T-031). Anexo I v1.01, grupo infDPS/subst: o XSD (TSCodJustSubst) pede o
 # código com dois dígitos, embora o Anexo I diga tamanho 1 (docs/SOURCES.md).
 OUTROS = 99
@@ -362,6 +421,7 @@ class Dps:
     ver_aplic: str = "nfse-poc-0.1"
     tp_emit: int = 1  # 1=Prestador
     subst: Substituicao | None = None  # NFS-e substituída (T-031)
+    ibs_cbs: IbsCbs | None = None  # obrigatório desde a competência 01/10/2026 (T-034)
 
     def __post_init__(self):
         if self.tp_amb not in (1, 2):
@@ -385,6 +445,32 @@ class Dps:
             raise ValueError("pAliq não pode ser informado sem retenção do ISSQN (tp_ret_issqn 1)")
         if self.subst is not None:
             self._conferir_chave_substituida(self.subst.chave)
+        self._conferir_ibs_cbs()
+
+    def _conferir_ibs_cbs(self) -> None:
+        # Anexo VI v1.04.01: regras 690 (E0850), 692 (E0855), 697 (E0902), 719 (E0932).
+        if self.ibs_cbs is None:
+            if self.d_compet >= IBSCBS_OBRIGATORIO_DESDE:
+                raise ValueError(
+                    "o grupo IBS/CBS (ibs_cbs) é obrigatório com competência a partir de "
+                    "01/10/2026 (E0855)"
+                )
+            return
+        if self.d_compet < IBSCBS_PERMITIDO_DESDE:
+            raise ValueError(
+                "o grupo IBS/CBS (ibs_cbs) só é permitido com competência a partir de "
+                "01/01/2026 (E0850)"
+            )
+        c_ind_op, c_trib_nac = self.ibs_cbs.c_ind_op, self.servico.c_trib_nac
+        if c_trib_nac.startswith(_C_TRIB_NAC_IMOVEL) and not c_ind_op.startswith("02"):
+            raise ValueError(
+                f"o código de tributação nacional {c_trib_nac} (99.03) exige cIndOp 02XXXX (E0902)"
+            )
+        if c_ind_op in C_IND_OP_IMOVEL and c_trib_nac not in CODIGOS_DE_OBRA_SEM_IMOVEL:
+            raise ValueError(
+                f"cIndOp {c_ind_op} é de operação com imóvel e exige o grupo imovel (E0932), "
+                "ainda não suportado; nos subitens de obra o grupo não é exigido"
+            )
 
     def _conferir_chave_substituida(self, chave: str) -> None:
         # E0042: município (posições 1 a 7), tipo de inscrição (9) e inscrição (10 a 23) da
@@ -496,8 +582,24 @@ def para_xml(dps: Dps) -> bytes:
     # ME/EPP: indTotTrib é proibido (E0712); vai o percentual do Simples (DEC-013).
     tot = _sub(trib, "totTrib")
     _sub(tot, "pTotTribSN", _dinheiro(dps.valores.p_tot_trib_sn))
+    if dps.ibs_cbs is not None:
+        _ibs_cbs_xml(inf, dps.ibs_cbs)
 
     return etree.tostring(raiz, xml_declaration=True, encoding="UTF-8")
+
+
+def _ibs_cbs_xml(inf, grupo: IbsCbs) -> None:
+    # Ordem de TCRTCInfoIBSCBS: finNFSe, indFinal, cIndOp, (tpOper, gRefNFSe, tpEnteGov),
+    # indDest, (dest, imovel), valores/trib/gIBSCBS (CST, cClassTrib).
+    el = _sub(inf, "IBSCBS")
+    _sub(el, "finNFSe", "0")
+    if grupo.ind_final is not None:
+        _sub(el, "indFinal", str(grupo.ind_final))
+    _sub(el, "cIndOp", grupo.c_ind_op)
+    _sub(el, "indDest", "0")
+    g = _sub(_sub(_sub(el, "valores"), "trib"), "gIBSCBS")
+    _sub(g, "CST", grupo.cst)
+    _sub(g, "cClassTrib", grupo.c_class_trib)
 
 
 def _obra_xml(serv, obra: Obra) -> None:

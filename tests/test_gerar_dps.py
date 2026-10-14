@@ -119,3 +119,30 @@ def test_cno_com_codigo_que_nao_e_de_obra_sai_com_erro_claro(capsys):
         gerar_dps.main(["--obra-cno", CNO_FICTICIO])
     assert saida.value.code == 2
     assert "E0372" in capsys.readouterr().err
+
+
+# --- grupo IBS/CBS (T-034, DEC-069) ------------------------------------------------------
+
+
+def test_exemplo_leva_o_grupo_ibscbs_do_anexo_viii_para_o_servico_padrao():
+    # Serviço padrão fictício 01.01.01: a linha do Anexo VIII dá 100301 e 000001.
+    dps = gerar_dps.dps_exemplo(2, carregar_emitente("exemplo"))
+    assert (dps.ibs_cbs.c_ind_op, dps.ibs_cbs.c_class_trib) == ("100301", "000001")
+    assert (gerar_dps.C_IND_OP_FICTICIO, gerar_dps.C_CLASS_TRIB_FICTICIO) == ("100301", "000001")
+
+
+def test_codigos_ibscbs_vem_dos_argumentos(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    args = ["--c-ind-op", "030101", "--c-class-trib", "200052"]
+    assert gerar_dps.main(args) == 0
+    out = capsys.readouterr().out
+    assert "<cIndOp>030101</cIndOp>" in out
+    assert "<CST>200</CST><cClassTrib>200052</cClassTrib>" in out
+    assert "[OK] Válida" in out
+
+
+def test_cind_op_invalido_sai_com_erro_claro(capsys):
+    with pytest.raises(SystemExit) as saida:
+        gerar_dps.main(["--c-ind-op", "080101"])
+    assert saida.value.code == 2
+    assert "E0901" in capsys.readouterr().err

@@ -3,6 +3,7 @@
 Os dados do prestador vêm do emitente escolhido com --emitente (padrão: o exemplo fictício).
 O percentual de pTotTribSN da competência vem de --p-tot-trib-sn (padrão fictício, Q-18).
 Para um serviço de obra: --c-trib-nac com um código de obra e --obra-cno (T-020).
+O grupo IBS/CBS leva --c-ind-op e --c-class-trib (T-034; padrão fictício do Anexo VIII).
 """
 
 import argparse
@@ -16,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import carregar_config
 from src.dps import (
     Dps,
+    IbsCbs,
     Obra,
     PisCofins,
     Prestador,
@@ -31,6 +33,9 @@ from src.emitente import EXEMPLO, Emitente, carregar_emitente
 BRT = timezone(timedelta(hours=-3))
 P_TOT_TRIB_SN_FICTICIO = Decimal("6.00")
 C_TRIB_NAC_FICTICIO = "010101"
+# Grupo IBS/CBS (T-034): a linha do Anexo VIII para o item 01.01 do serviço padrão.
+C_IND_OP_FICTICIO = "100301"
+C_CLASS_TRIB_FICTICIO = "000001"
 
 
 def dps_exemplo(
@@ -40,11 +45,14 @@ def dps_exemplo(
     *,
     c_trib_nac: str = C_TRIB_NAC_FICTICIO,
     obra_cno: str | None = None,
+    c_ind_op: str = C_IND_OP_FICTICIO,
+    c_class_trib: str = C_CLASS_TRIB_FICTICIO,
 ) -> Dps:
     # Tomador, serviço e valores são FICTÍCIOS; o prestador é o emitente recebido.
     # Perfil mais comum da carteira: ME/EPP pelo Simples, tomador pessoa física (DEC-013).
     # Com obra_cno, o serviço leva o grupo de obra com o CNO dado (T-020); o código de
-    # tributação precisa ser de obra (E0370, E0372).
+    # tributação precisa ser de obra (E0370, E0372). O grupo IBS/CBS vai sempre: a
+    # competência é a data de hoje, e desde 01/10/2026 ele é obrigatório (E0855).
     return Dps(
         tp_amb=tp_amb,
         c_loc_emi=emitente.municipio,
@@ -75,6 +83,7 @@ def dps_exemplo(
             # Perfil da nota real do primeiro emitente: sem incidência, sem retenção (T-018).
             pis_cofins=PisCofins(cst="08", tp_ret_pis_cofins=0),
         ),
+        ibs_cbs=IbsCbs(c_ind_op=c_ind_op, c_class_trib=c_class_trib),
     )
 
 
@@ -109,6 +118,18 @@ def main(argv: list[str] | None = None) -> int:
         help="número da obra no CNO (ou CEI): põe o grupo de obra, exigido pelos códigos de "
         "obra (E0370); padrão: nenhum",
     )
+    parser.add_argument(
+        "--c-ind-op",
+        default=C_IND_OP_FICTICIO,
+        help="código indicador da operação do grupo IBS/CBS, 6 dígitos, do Anexo VII "
+        "(padrão: %(default)s, fictício)",
+    )
+    parser.add_argument(
+        "--c-class-trib",
+        default=C_CLASS_TRIB_FICTICIO,
+        help="classificação tributária do IBS e da CBS, 6 dígitos; o CST são os 3 primeiros "
+        "(padrão: %(default)s, fictício)",
+    )
     args = parser.parse_args(argv)
     try:
         emitente = carregar_emitente(args.emitente)
@@ -123,6 +144,8 @@ def main(argv: list[str] | None = None) -> int:
             _decimal(args.p_tot_trib_sn),
             c_trib_nac=args.c_trib_nac,
             obra_cno=args.obra_cno,
+            c_ind_op=args.c_ind_op,
+            c_class_trib=args.c_class_trib,
         )
     except ValueError as erro:
         parser.error(str(erro))

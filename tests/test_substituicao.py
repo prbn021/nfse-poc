@@ -126,7 +126,8 @@ def test_motivo_sai_com_dois_digitos_e_sem_descricao(xsd, c_motivo, texto):  # n
 
 
 def test_sem_subst_o_xml_nao_muda():
-    golden = Path(__file__).parent / "dados" / "dps-sem-opcionais.xml"
+    # O golden da T-018 com o grupo IBS/CBS mínimo (T-034).
+    golden = Path(__file__).parent / "dados" / "dps-com-ibscbs.xml"
     assert para_xml(_dps()) == golden.read_bytes()
     assert _inf(_dps()).find("n:subst", N) is None
 
