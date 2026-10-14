@@ -42,9 +42,15 @@ jobs:
         if: github.event_name == 'pull_request'
         run: git fetch --no-tags --depth=1 origin main:main
 
-      - name: G-3 áreas frozen intocadas
+      # Dois passos: o pwsh do Actions só olha o código de saída do último comando.
+      - name: G-3 XSDs intocados
         if: github.event_name == 'pull_request'
-        run: git diff --exit-code main -- schemas/1.01 docs/referencia/gov-docs
+        run: git diff --exit-code main -- schemas/1.01
+
+      # Documento oficial novo é permitido; alterar, apagar ou renomear um existente, não (DEC-064).
+      - name: G-3 documentação oficial intocada
+        if: github.event_name == 'pull_request'
+        run: git diff --exit-code --diff-filter=DMRT main -- docs/referencia/gov-docs ':!docs/referencia/gov-docs/LEIAME.md' ':!docs/referencia/gov-docs/SHA256SUMS'
 
       - name: G-4 nenhum segredo rastreado
         run: .\.venv\Scripts\python.exe scripts\checar_segredos.py

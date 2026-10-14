@@ -36,11 +36,13 @@ def test_cada_arquivo_bate_com_o_sha256_do_manifesto():
     assert alterados == []
 
 
-def test_sao_oito_anexos_e_seis_manuais():
+def test_sao_nove_anexos_e_seis_manuais():
+    # O nono anexo, o Anexo VI da NT 009 (leiaute da Reforma Tributária), entrou na T-036.
     nomes = _oficiais()
-    assert len([n for n in nomes if n.startswith("anexo") and n.endswith(".xlsx")]) == 8
+    assert len([n for n in nomes if n.startswith("anexo") and n.endswith(".xlsx")]) == 9
+    assert "anexovi-leiautesrn_rtc_ibscbs-v1-04-01-nt009.xlsx" in nomes
     assert len([n for n in nomes if n.startswith("manual") and n.endswith(".pdf")]) == 6
-    assert len(nomes) == 14
+    assert len(nomes) == 15
 
 
 def test_a_pasta_tem_leiame_com_origem_e_licenca():
