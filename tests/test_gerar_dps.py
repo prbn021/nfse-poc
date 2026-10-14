@@ -129,13 +129,16 @@ def test_exemplo_leva_o_grupo_ibscbs_do_anexo_viii_para_o_servico_padrao():
     dps = gerar_dps.dps_exemplo(2, carregar_emitente("exemplo"))
     assert (dps.ibs_cbs.c_ind_op, dps.ibs_cbs.c_class_trib) == ("100301", "000001")
     assert (gerar_dps.C_IND_OP_FICTICIO, gerar_dps.C_CLASS_TRIB_FICTICIO) == ("100301", "000001")
+    # NBS do mesmo item (1.1502.10.00), exigido com o grupo (E0322).
+    assert dps.servico.c_nbs == gerar_dps.C_NBS_FICTICIO == "115021000"
 
 
 def test_codigos_ibscbs_vem_dos_argumentos(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    args = ["--c-ind-op", "030101", "--c-class-trib", "200052"]
+    args = ["--c-ind-op", "030101", "--c-class-trib", "200052", "--c-nbs", "1.2301.23.00"]
     assert gerar_dps.main(args) == 0
     out = capsys.readouterr().out
+    assert "<cNBS>123012300</cNBS>" in out
     assert "<cIndOp>030101</cIndOp>" in out
     assert "<CST>200</CST><cClassTrib>200052</cClassTrib>" in out
     assert "[OK] Válida" in out

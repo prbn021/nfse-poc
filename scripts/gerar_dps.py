@@ -3,7 +3,8 @@
 Os dados do prestador vêm do emitente escolhido com --emitente (padrão: o exemplo fictício).
 O percentual de pTotTribSN da competência vem de --p-tot-trib-sn (padrão fictício, Q-18).
 Para um serviço de obra: --c-trib-nac com um código de obra e --obra-cno (T-020).
-O grupo IBS/CBS leva --c-ind-op e --c-class-trib (T-034; padrão fictício do Anexo VIII).
+O grupo IBS/CBS leva --c-ind-op e --c-class-trib, e o serviço o NBS em --c-nbs (T-034; padrão
+fictício do Anexo VIII).
 """
 
 import argparse
@@ -36,6 +37,7 @@ C_TRIB_NAC_FICTICIO = "010101"
 # Grupo IBS/CBS (T-034): a linha do Anexo VIII para o item 01.01 do serviço padrão.
 C_IND_OP_FICTICIO = "100301"
 C_CLASS_TRIB_FICTICIO = "000001"
+C_NBS_FICTICIO = "115021000"  # 1.1502.10.00, exigido com o grupo (E0322)
 
 
 def dps_exemplo(
@@ -47,6 +49,7 @@ def dps_exemplo(
     obra_cno: str | None = None,
     c_ind_op: str = C_IND_OP_FICTICIO,
     c_class_trib: str = C_CLASS_TRIB_FICTICIO,
+    c_nbs: str = C_NBS_FICTICIO,
 ) -> Dps:
     # Tomador, serviço e valores são FICTÍCIOS; o prestador é o emitente recebido.
     # Perfil mais comum da carteira: ME/EPP pelo Simples, tomador pessoa física (DEC-013).
@@ -76,6 +79,7 @@ def dps_exemplo(
             c_trib_mun="001",
             descricao="Desenvolvimento de software sob encomenda",
             obra=None if obra_cno is None else Obra(c_obra=obra_cno),
+            c_nbs=c_nbs,
         ),
         valores=Valores(
             v_serv=Decimal("100.00"),
@@ -85,6 +89,11 @@ def dps_exemplo(
         ),
         ibs_cbs=IbsCbs(c_ind_op=c_ind_op, c_class_trib=c_class_trib),
     )
+
+
+def nbs(texto: str) -> str:
+    """Código NBS como no Anexo VIII (1.1502.10.00) ou só os 9 dígitos."""
+    return texto.replace(".", "")
 
 
 def _decimal(texto: str) -> Decimal:
@@ -130,6 +139,12 @@ def main(argv: list[str] | None = None) -> int:
         help="classificação tributária do IBS e da CBS, 6 dígitos; o CST são os 3 primeiros "
         "(padrão: %(default)s, fictício)",
     )
+    parser.add_argument(
+        "--c-nbs",
+        default=C_NBS_FICTICIO,
+        help="código NBS do serviço, com ou sem pontos, exigido com o grupo IBS/CBS (E0322) "
+        "(padrão: %(default)s, fictício)",
+    )
     args = parser.parse_args(argv)
     try:
         emitente = carregar_emitente(args.emitente)
@@ -146,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
             obra_cno=args.obra_cno,
             c_ind_op=args.c_ind_op,
             c_class_trib=args.c_class_trib,
+            c_nbs=nbs(args.c_nbs),
         )
     except ValueError as erro:
         parser.error(str(erro))

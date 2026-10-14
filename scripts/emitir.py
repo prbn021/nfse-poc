@@ -4,7 +4,7 @@ Script manual: usa a rede e o certificado real do emitente. Monta a DPS de exemp
 gerar_dps.py com o número pedido, o código de tributação nacional do serviço do emitente
 (obrigatório, E0312), se dado, o municipal (`cTribMun`, E0314; sem ele, a DPS vai sem) e,
 se dado, o CNO da obra (grupo de obra, T-020), e o grupo IBS/CBS com o indicador da operação
-e a classificação tributária do serviço (obrigatórios, T-034; Anexo VIII);
+e a classificação tributária do serviço e o NBS (obrigatórios, T-034; Anexo VIII);
 valida contra o XSD, assina, confere a assinatura e envia uma vez (src/emissao.py).
 Salva em out/ a DPS enviada e a NFS-e devolvida. Só produção restrita (INV-02).
 Não mostra senha, chave nem conteúdo do certificado (INV-05).
@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from gerar_dps import P_TOT_TRIB_SN_FICTICIO, _decimal, dps_exemplo
+from gerar_dps import P_TOT_TRIB_SN_FICTICIO, _decimal, dps_exemplo, nbs
 
 from src.assinatura import assinar_dps, conferir_assinatura
 from src.certificado import carregar_certificado
@@ -176,6 +176,12 @@ def main(
         "3 primeiros",
     )
     parser.add_argument(
+        "--c-nbs",
+        required=True,
+        help="código NBS do serviço, com ou sem pontos (Anexo VIII), exigido com o grupo "
+        "IBS/CBS (E0322)",
+    )
+    parser.add_argument(
         "--p-tot-trib-sn",
         default=str(P_TOT_TRIB_SN_FICTICIO),
         help="%% aproximado dos tributos do Simples na competência (padrão: %(default)s, fictício)",
@@ -212,6 +218,7 @@ def main(
             obra_cno=args.obra_cno,
             c_ind_op=args.c_ind_op,
             c_class_trib=args.c_class_trib,
+            c_nbs=nbs(args.c_nbs),
         )
         dps = dataclasses.replace(
             exemplo,

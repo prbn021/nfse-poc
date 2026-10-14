@@ -102,6 +102,9 @@ CODIGOS_DE_OBRA_SEM_IMOVEL = CODIGOS_DE_OBRA - {"141403", "141404"}
 _C_TRIB_NAC_IMOVEL = "9903"  # 99.03: cIndOp obrigatoriamente 02XXXX (E0902)
 _C_IND_OP = re.compile(r"[0-9]{6}")  # TSRTCCodIndOp
 _C_CLASS_TRIB = re.compile(r"[0-9]{6}")  # TSRTCCodClassTrib
+_C_NBS = re.compile(r"[0-9]{9}")  # TSCodNBS
+# Anexo VI, regra 448: no subitem 99.03, o NBS é 1.1002.10.00 ou 1.1002.20.00.
+_NBS_99_03 = ("110021000", "110022000")
 
 
 def fone_valido(fone: object) -> bool:
@@ -256,6 +259,9 @@ class Servico:
     # incidência (E0314), o que só o servidor confere.
     c_trib_mun: str | None = None
     obra: Obra | None = None  # obrigatório para CODIGOS_DE_OBRA (T-020)
+    # Código NBS do serviço, 9 dígitos sem pontos (Anexo B; o do serviço está no Anexo VIII).
+    # Obrigatório com o grupo IBS/CBS (E0322, DEC-070); a existência (E0316) fica com o servidor.
+    c_nbs: str | None = None
 
     def __post_init__(self):
         _so_digitos(self.c_loc_prestacao, 7, "servico.c_loc_prestacao")
@@ -264,6 +270,12 @@ class Servico:
             raise ValueError("servico.c_trib_mun deve ter 3 dígitos numéricos")
         if not self.descricao.strip():
             raise ValueError("servico.descricao é obrigatória")
+        if self.c_nbs is not None and (
+            not isinstance(self.c_nbs, str) or not _C_NBS.fullmatch(self.c_nbs)
+        ):
+            raise ValueError(
+                f"servico.c_nbs deve ter 9 dígitos, sem pontos, recebido: {self.c_nbs!r}"
+            )
         if self.c_trib_nac in CODIGOS_DE_OBRA and self.obra is None:
             raise ValueError(
                 f"o código de tributação nacional {self.c_trib_nac} é de obra: o grupo de obra "
@@ -448,7 +460,8 @@ class Dps:
         self._conferir_ibs_cbs()
 
     def _conferir_ibs_cbs(self) -> None:
-        # Anexo VI v1.04.01: regras 690 (E0850), 692 (E0855), 697 (E0902), 719 (E0932).
+        # Anexo VI v1.04.01: regras 690 (E0850), 692 (E0855), 447 (E0322), 697 (E0902),
+        # 448 (NBS do 99.03), 719 (E0932).
         if self.ibs_cbs is None:
             if self.d_compet >= IBSCBS_OBRIGATORIO_DESDE:
                 raise ValueError(
@@ -461,10 +474,19 @@ class Dps:
                 "o grupo IBS/CBS (ibs_cbs) só é permitido com competência a partir de "
                 "01/01/2026 (E0850)"
             )
+        if self.servico.c_nbs is None:
+            raise ValueError(
+                "o código NBS do serviço (servico.c_nbs) é obrigatório com o grupo IBS/CBS (E0322)"
+            )
         c_ind_op, c_trib_nac = self.ibs_cbs.c_ind_op, self.servico.c_trib_nac
         if c_trib_nac.startswith(_C_TRIB_NAC_IMOVEL) and not c_ind_op.startswith("02"):
             raise ValueError(
                 f"o código de tributação nacional {c_trib_nac} (99.03) exige cIndOp 02XXXX (E0902)"
+            )
+        if c_trib_nac.startswith(_C_TRIB_NAC_IMOVEL) and self.servico.c_nbs not in _NBS_99_03:
+            raise ValueError(
+                f"o código de tributação nacional {c_trib_nac} (99.03) exige o NBS 1.1002.10.00 "
+                "ou 1.1002.20.00 (Anexo VI, regra 448)"
             )
         if c_ind_op in C_IND_OP_IMOVEL and c_trib_nac not in CODIGOS_DE_OBRA_SEM_IMOVEL:
             raise ValueError(
@@ -562,6 +584,8 @@ def para_xml(dps: Dps) -> bytes:
     if dps.servico.c_trib_mun is not None:
         _sub(cserv, "cTribMun", dps.servico.c_trib_mun)
     _sub(cserv, "xDescServ", dps.servico.descricao)
+    if dps.servico.c_nbs is not None:
+        _sub(cserv, "cNBS", dps.servico.c_nbs)
     if dps.servico.obra is not None:
         _obra_xml(serv, dps.servico.obra)
 

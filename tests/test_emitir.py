@@ -103,7 +103,7 @@ class Servidor:
 
 
 # Códigos do grupo IBS/CBS (T-034): a linha do Anexo VIII para o item 01.01, fictícia aqui.
-IBSCBS = ["--c-ind-op", "100301", "--c-class-trib", "000001"]
+IBSCBS = ["--c-ind-op", "100301", "--c-class-trib", "000001", "--c-nbs", "1.1502.10.00"]
 
 
 def rodar(emitentes, tmp_path, servidor, *args, ambiente="homologacao", c_trib_nac="990101"):
@@ -352,6 +352,7 @@ def test_numero_invalido_nao_envia(emitentes, tmp_path, capsys):
         ["--n-dps", "1", "--c-trib-nac", "990101", *IBSCBS],
         ["--emitente", "acme", "--n-dps", "1", *IBSCBS],
         ["--emitente", "acme", "--n-dps", "1", "--c-trib-nac", "990101", "--c-ind-op", "100301"],
+        ["--emitente", "acme", "--n-dps", "1", "--c-trib-nac", "990101", *IBSCBS[:4]],
         [
             "--emitente",
             "acme",
@@ -376,9 +377,12 @@ def test_emitente_numero_e_codigo_sao_obrigatorios(argv, capsys):
 def test_dps_enviada_leva_o_grupo_ibscbs_dos_argumentos(emitentes, tmp_path):
     # Códigos do Anexo VIII para o item 17.19 (fictício aqui): CST derivado do cClassTrib.
     servidor = Servidor()
-    args = ["--c-ind-op", "100301", "--c-class-trib", "200052"]
+    args = ["--c-ind-op", "100301", "--c-class-trib", "200052", "--c-nbs", "123012300"]
     assert rodar(emitentes, tmp_path, servidor, *args) == 0
-    grupo = etree.fromstring(servidor.dps_recebida).find("n:infDPS/n:IBSCBS", N)
+    inf = etree.fromstring(servidor.dps_recebida).find("n:infDPS", N)
+    # O NBS vai com ou sem os pontos do Anexo VIII; na DPS, 9 dígitos (E0322).
+    assert inf.findtext("n:serv/n:cServ/n:cNBS", namespaces=N) == "123012300"
+    grupo = inf.find("n:IBSCBS", N)
     assert grupo.findtext("n:cIndOp", namespaces=N) == "100301"
     g = grupo.find("n:valores/n:trib/n:gIBSCBS", N)
     assert [el.text for el in g] == ["200", "200052"]
@@ -390,6 +394,7 @@ def test_dps_enviada_leva_o_grupo_ibscbs_dos_argumentos(emitentes, tmp_path):
         (["--c-ind-op", "080101"], "E0901"),
         (["--c-ind-op", "020101"], "E0932"),
         (["--c-class-trib", "12345"], "c_class_trib"),
+        (["--c-nbs", "1.2301.23"], "c_nbs"),
     ],
 )
 def test_codigos_ibscbs_invalidos_nao_enviam(emitentes, tmp_path, capsys, args, texto):

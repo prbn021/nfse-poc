@@ -39,6 +39,10 @@ def xsd():
     return localizar_xsd_dps(XSD_DIR_PADRAO)
 
 
+def _servico_sem_nbs() -> Servico:
+    return Servico(c_loc_prestacao="3304557", c_trib_nac="010101", descricao="Serviço")
+
+
 def _grupo(dps) -> etree._Element:
     return etree.fromstring(para_xml(dps)).find("n:infDPS/n:IBSCBS", N)
 
@@ -143,13 +147,16 @@ def test_cind_op_de_imovel_em_servico_de_obra_e_aceito(xsd):
         c_trib_nac="070202",
         descricao="Obra",
         obra=Obra(c_obra="900000000001"),
+        c_nbs="115021000",
     )
     dps = _dps(servico=servico, ibs_cbs=_ibs_cbs(c_ind_op="020201", c_class_trib="200046"))
     assert validar_xml(para_xml(dps), xsd) == []
 
 
 def test_codigo_99_03_exige_cind_op_de_imovel():
-    servico = Servico(c_loc_prestacao="3304557", c_trib_nac="990301", descricao="Serviço")
+    servico = Servico(
+        c_loc_prestacao="3304557", c_trib_nac="990301", descricao="Serviço", c_nbs="110021000"
+    )
     with pytest.raises(ValueError, match="E0902"):
         _dps(servico=servico, ibs_cbs=_ibs_cbs(c_ind_op="100301"))
 
@@ -192,7 +199,7 @@ def test_xml_com_grupo_igual_ao_golden():
 def test_sem_grupo_o_xml_e_o_da_t018():
     # O golden da T-018 tem competência 2026-10-07; sem o grupo, a DPS precisa de uma
     # competência anterior a 01/10/2026 (E0855), e só o dCompet muda.
-    dps = _dps(d_compet=ANTES_DA_E0855, ibs_cbs=None)
+    dps = _dps(d_compet=ANTES_DA_E0855, ibs_cbs=None, servico=_servico_sem_nbs())
     esperado = GOLDEN.read_bytes().replace(
         b"<dCompet>2026-10-07</dCompet>", b"<dCompet>2026-09-30</dCompet>"
     )
@@ -200,7 +207,52 @@ def test_sem_grupo_o_xml_e_o_da_t018():
     assert b"IBSCBS" not in esperado
 
 
-def test_golden_com_grupo_e_o_da_t018_mais_o_grupo():
-    assert GOLDEN_IBSCBS.read_bytes() == GOLDEN.read_bytes().replace(
-        b"</infDPS>", GRUPO_MINIMO + b"</infDPS>"
+def test_golden_com_grupo_e_o_da_t018_mais_o_nbs_e_o_grupo():
+    # O NBS é exigido com o grupo (E0322) e vem depois de xDescServ (TCCServ).
+    esperado = (
+        GOLDEN.read_bytes()
+        .replace(b"</xDescServ>", b"</xDescServ><cNBS>115021000</cNBS>")
+        .replace(b"</infDPS>", GRUPO_MINIMO + b"</infDPS>")
     )
+    assert GOLDEN_IBSCBS.read_bytes() == esperado
+
+
+# --- NBS (E0322; ajuste depois da recusa da produção restrita em 2026-10-14, DEC-070) ----
+
+
+def test_grupo_sem_nbs_e_recusado():
+    with pytest.raises(ValueError, match="E0322"):
+        _dps(servico=_servico_sem_nbs())
+
+
+def test_nbs_sem_grupo_e_aceito(xsd):
+    dps = _dps(d_compet=ANTES_DA_E0855, ibs_cbs=None)
+    assert validar_xml(para_xml(dps), xsd) == []
+
+
+@pytest.mark.parametrize("codigo", ["12301230", "1230123000", "1.2301.23.00", "12301230a", ""])
+def test_nbs_fora_de_9_digitos_e_recusado(codigo):
+    with pytest.raises(ValueError, match="c_nbs"):
+        Servico(c_loc_prestacao="3304557", c_trib_nac="010101", descricao="S", c_nbs=codigo)
+
+
+def test_nbs_sai_depois_de_xdescserv(xsd):
+    xml = para_xml(_dps())
+    assert validar_xml(xml, xsd) == []
+    cserv = etree.fromstring(xml).find("n:infDPS/n:serv/n:cServ", N)
+    assert _filhos(cserv) == ["cTribNac", "xDescServ", "cNBS"]
+    assert cserv.findtext("n:cNBS", namespaces=N) == "115021000"
+
+
+@pytest.mark.parametrize(
+    ("nbs", "aceito"), [("110021000", True), ("110022000", True), ("115021000", False)]
+)
+def test_codigo_99_03_so_aceita_os_nbs_da_regra_448(nbs, aceito):
+    servico = Servico(c_loc_prestacao="3304557", c_trib_nac="990301", descricao="S", c_nbs=nbs)
+    # 020102 (BICE): o único 02XXXX que não exige o grupo imovel (E0932).
+    ibs = _ibs_cbs(c_ind_op="020102")
+    if aceito:
+        assert _dps(servico=servico, ibs_cbs=ibs).servico.c_nbs == nbs
+    else:
+        with pytest.raises(ValueError, match=r"1\.1002\.10\.00"):
+            _dps(servico=servico, ibs_cbs=ibs)
