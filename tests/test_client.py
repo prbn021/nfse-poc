@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives import serialization
 from src.certificado import carregar_certificado
 from src.client import ClienteNfse, ErroConexao, contexto_tls
 from src.codec import codificar, decodificar
-from src.config import Config
+from src.config import XSD_DIR_PADRAO, Config
 from src.dps import gerar_id
 from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
 from tests.pfx import CNPJ, gerar_pfx
@@ -38,7 +38,7 @@ def config(*, ambiente="homologacao", sefin_url=BASE) -> Config:
         ambiente=ambiente,
         sefin_url=sefin_url,
         adn_url="https://adn.producaorestrita.nfse.gov.br",
-        xsd_dir=Path("schemas/1.01"),
+        xsd_dir=XSD_DIR_PADRAO,
     )
 
 

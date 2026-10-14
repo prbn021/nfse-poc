@@ -25,7 +25,6 @@ from src.emitente import PASTA, carregar_emitente
 from src.erros import RejeicaoApi, RespostaInesperada
 from src.evento import conferir_evento, localizar_xsd_evento
 from src.nfse import conferir_nfse, localizar_xsd_nfse
-from src.xsd import preparar_copia_local
 
 # Códigos de saída, os mesmos do emitir.py: 0 consultada e conferida; 1 erro antes da consulta.
 ERRO_DE_REDE = 3
@@ -110,8 +109,8 @@ def main(
         _erro(str(erro))
         return 1
 
-    xsd_local = preparar_copia_local(config.xsd_dir)
-    xsd_nfse, xsd_evento = localizar_xsd_nfse(xsd_local), localizar_xsd_evento(xsd_local)
+    xsd_dir = config.xsd_dir
+    xsd_nfse, xsd_evento = localizar_xsd_nfse(xsd_dir), localizar_xsd_evento(xsd_dir)
     if xsd_nfse is None or xsd_evento is None:
         _erro(f"XSD da NFS-e ou do evento não encontrado em {config.xsd_dir}")
         return 1

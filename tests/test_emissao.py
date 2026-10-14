@@ -11,11 +11,10 @@ import pytest
 from src.assinatura import assinar_dps
 from src.certificado import Certificado
 from src.client import ErroConexao
-from src.config import RAIZ
+from src.config import XSD_DIR_PADRAO
 from src.emissao import DpsJaEmitida, EnvioIncerto, emitir
 from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
 from src.nfse import NfseEmitida, localizar_xsd_nfse
-from src.xsd import preparar_copia_local
 from tests.nfse_ficticia import CHAVE, gerar_nfse
 from tests.pfx import chave_de_teste, gerar_certificado
 
@@ -24,11 +23,8 @@ ID_DPS = "DPS330455721122233300018100001000000000000042"
 
 
 @pytest.fixture(scope="module")
-def xsd(tmp_path_factory):
-    copia = preparar_copia_local(
-        RAIZ / "schemas" / "1.01", tmp_path_factory.mktemp("xsd") / "1.01-local"
-    )
-    return localizar_xsd_nfse(copia)
+def xsd():
+    return localizar_xsd_nfse(XSD_DIR_PADRAO)
 
 
 @pytest.fixture(scope="module")

@@ -33,7 +33,7 @@ def test_arquivo_de_segredo_e_apontado(caminho):
         ".env.example",
         "src/config.py",
         "docs/SPEC.md",
-        "schemas/1.01/DPS_v1.01.xsd",
+        "schemas/v1.01-prodrest-20260727/DPS_v1.01.xsd",
         "tests/test_segredos.py",
         "docs/referencia/gov-docs/LEIAME.md",
         "docs/referencia/gov-docs/SHA256SUMS",

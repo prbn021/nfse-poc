@@ -12,11 +12,10 @@ from lxml import etree
 
 from src.assinatura import assinar_dps
 from src.certificado import Certificado
-from src.config import RAIZ
+from src.config import XSD_DIR_PADRAO
 from src.dps import NS, Substituicao, para_xml, validar_xml
 from src.evento import conferir_substituicao, localizar_xsd_evento
 from src.nfse import ResumoDps, resumo_da_dps
-from src.xsd import preparar_copia_local
 from tests.evento_ficticio import gerar_evento
 from tests.nfse_ficticia import CHAVE, gerar_nfse
 from tests.pfx import chave_de_teste, gerar_certificado
@@ -170,11 +169,8 @@ def test_resumo_sem_dcompet():
 
 
 @pytest.fixture(scope="module")
-def xsd_evento(tmp_path_factory):
-    copia = preparar_copia_local(
-        RAIZ / "schemas" / "1.01", tmp_path_factory.mktemp("xsd-ev") / "1.01-local"
-    )
-    return localizar_xsd_evento(copia)
+def xsd_evento():
+    return localizar_xsd_evento(XSD_DIR_PADRAO)
 
 
 def test_evento_de_substituicao_correto(xsd_evento):

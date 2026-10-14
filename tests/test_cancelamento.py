@@ -13,10 +13,9 @@ from src.assinatura import assinar_pedido_evento
 from src.cancelamento import CancelamentoIncerto, NotaJaCancelada, cancelar
 from src.certificado import Certificado
 from src.client import ErroConexao
-from src.config import RAIZ
+from src.config import XSD_DIR_PADRAO
 from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
 from src.evento import localizar_xsd_evento
-from src.xsd import preparar_copia_local
 from tests.evento_ficticio import gerar_evento
 from tests.nfse_ficticia import CHAVE
 from tests.pfx import chave_de_teste, gerar_certificado
@@ -26,11 +25,8 @@ ID_PEDIDO = f"PRE{CHAVE}101101"
 
 
 @pytest.fixture(scope="module")
-def xsd(tmp_path_factory):
-    copia = preparar_copia_local(
-        RAIZ / "schemas" / "1.01", tmp_path_factory.mktemp("xsd") / "1.01-local"
-    )
-    return localizar_xsd_evento(copia)
+def xsd():
+    return localizar_xsd_evento(XSD_DIR_PADRAO)
 
 
 @pytest.fixture(scope="module")

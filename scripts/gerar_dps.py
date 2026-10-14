@@ -1,4 +1,4 @@
-"""Gera uma DPS de exemplo, salva em out/ e valida contra a cópia local dos XSDs oficiais.
+"""Gera uma DPS de exemplo, salva em out/ e valida contra o pacote oficial de XSDs ativo.
 
 Os dados do prestador vêm do emitente escolhido com --emitente (padrão: o exemplo fictício).
 O percentual de pTotTribSN da competência vem de --p-tot-trib-sn (padrão fictício, Q-18).
@@ -27,7 +27,6 @@ from src.dps import (
     validar_xml,
 )
 from src.emitente import EXEMPLO, Emitente, carregar_emitente
-from src.xsd import preparar_copia_local
 
 BRT = timezone(timedelta(hours=-3))
 P_TOT_TRIB_SN_FICTICIO = Decimal("6.00")
@@ -138,14 +137,14 @@ def main(argv: list[str] | None = None) -> int:
     if not localizar_xsd_dps(cfg.xsd_dir):
         print(f"[!] XSD não encontrado em {cfg.xsd_dir}. Veja schemas/LEIAME.md.")
         return 2
-    xsd = localizar_xsd_dps(preparar_copia_local(cfg.xsd_dir))
+    xsd = localizar_xsd_dps(cfg.xsd_dir)
     erros = validar_xml(xml, xsd)
     if erros:
         print(f"[X] Inválida contra {xsd.name}:")
         for e in erros:
             print("   -", e)
         return 1
-    print(f"[OK] Válida contra {xsd.name} (cópia local em {xsd.parent})")
+    print(f"[OK] Válida contra {xsd.name} ({xsd.parent})")
     return 0
 
 

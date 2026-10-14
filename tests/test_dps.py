@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from lxml import etree
 
-from src.config import RAIZ
+from src.config import XSD_DIR_PADRAO
 from src.dps import (
     CODIGOS_DE_OBRA,
     NS,
@@ -24,7 +24,6 @@ from src.dps import (
     para_xml,
     validar_xml,
 )
-from src.xsd import preparar_copia_local
 
 BRT = timezone(timedelta(hours=-3))
 N = {"n": NS}
@@ -71,13 +70,8 @@ def _dps(**over) -> Dps:
 
 
 @pytest.fixture(scope="module")
-def xsd(tmp_path_factory):
-    # Cópia local dos XSDs oficiais (ver src/xsd.py): o padrão de `serie` no XSD oficial
-    # traz ^ e $, que em XML Schema são caracteres literais.
-    copia = preparar_copia_local(
-        RAIZ / "schemas" / "1.01", tmp_path_factory.mktemp("xsd") / "1.01-local"
-    )
-    return localizar_xsd_dps(copia)
+def xsd():
+    return localizar_xsd_dps(XSD_DIR_PADRAO)
 
 
 def _filhos(raiz, caminho: str) -> list[str]:

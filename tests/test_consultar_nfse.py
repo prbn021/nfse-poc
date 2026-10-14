@@ -13,7 +13,7 @@ import pytest
 from src.assinatura import assinar_dps
 from src.certificado import Certificado
 from src.codec import codificar
-from src.config import RAIZ, Config
+from src.config import RAIZ, XSD_DIR_PADRAO, Config
 from tests.evento_ficticio import CANCELAMENTO, gerar_evento
 from tests.nfse_ficticia import CHAVE, gerar_nfse
 from tests.pfx import CNPJ, chave_de_teste, gerar_certificado, gerar_pfx
@@ -34,7 +34,7 @@ def config(ambiente="homologacao") -> Config:
         ambiente=ambiente,
         sefin_url=BASE,
         adn_url="https://adn.producaorestrita.nfse.gov.br",
-        xsd_dir=RAIZ / "schemas" / "1.01",
+        xsd_dir=XSD_DIR_PADRAO,
     )
 
 

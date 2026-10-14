@@ -61,3 +61,15 @@ def test_env_example_so_tem_variaveis_de_ambiente():
     linhas = (config.RAIZ / ".env.example").read_text(encoding="utf-8").splitlines()
     nomes = sorted(linha.split("=")[0] for linha in linhas if linha.startswith("NFSE_"))
     assert nomes == ["NFSE_ADN_URL", "NFSE_AMBIENTE", "NFSE_SEFIN_URL", "NFSE_XSD_DIR"]
+
+
+def test_sem_variaveis_o_xsd_e_o_pacote_ativo():
+    # T-038 (DEC-066): um único pacote ativo, o padrão de NFSE_XSD_DIR.
+    assert carregar_config().xsd_dir == config.XSD_DIR_PADRAO
+    assert config.XSD_DIR_PADRAO == config.RAIZ / config.PACOTE_XSD
+
+
+def test_env_example_aponta_o_pacote_ativo():
+    linhas = (config.RAIZ / ".env.example").read_text(encoding="utf-8").splitlines()
+    [xsd] = [linha for linha in linhas if linha.startswith("NFSE_XSD_DIR=")]
+    assert xsd.split("#")[0].strip() == f"NFSE_XSD_DIR={config.PACOTE_XSD}"
