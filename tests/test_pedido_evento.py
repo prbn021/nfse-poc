@@ -18,7 +18,7 @@ from signxml.exceptions import SignXMLException
 import src.assinatura as assinatura
 from src.assinatura import assinar_dps, assinar_pedido_evento, conferir_assinatura
 from src.certificado import Certificado
-from src.config import RAIZ
+from src.config import XSD_DIR_PADRAO
 from src.dps import NS, validar_xml
 from src.evento import (
     CANCELAMENTO,
@@ -26,7 +26,6 @@ from src.evento import (
     localizar_xsd_pedido_evento,
     para_xml_pedido,
 )
-from src.xsd import preparar_copia_local
 from tests.nfse_ficticia import CHAVE
 from tests.pfx import CNPJ, chave_de_teste, gerar_certificado
 
@@ -75,11 +74,8 @@ def assinado(xml, cert) -> bytes:
 
 
 @pytest.fixture(scope="module")
-def xsd(tmp_path_factory):
-    copia = preparar_copia_local(
-        RAIZ / "schemas" / "1.01", tmp_path_factory.mktemp("xsd") / "1.01-local"
-    )
-    return localizar_xsd_pedido_evento(copia)
+def xsd():
+    return localizar_xsd_pedido_evento(XSD_DIR_PADRAO)
 
 
 # --- (1) modelo ----------------------------------------------------------------------------

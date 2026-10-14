@@ -16,9 +16,8 @@ from signxml.exceptions import SignXMLException
 import src.assinatura as assinatura
 from src.assinatura import assinar_dps, conferir_assinatura
 from src.certificado import Certificado
-from src.config import RAIZ
+from src.config import XSD_DIR_PADRAO
 from src.dps import NS, localizar_xsd_dps, validar_xml
-from src.xsd import preparar_copia_local
 from tests.pfx import CNPJ, chave_de_teste, gerar_certificado
 
 DS = "http://www.w3.org/2000/09/xmldsig#"
@@ -48,11 +47,8 @@ def assinada(cert) -> bytes:
 
 
 @pytest.fixture(scope="module")
-def xsd(tmp_path_factory):
-    copia = preparar_copia_local(
-        RAIZ / "schemas" / "1.01", tmp_path_factory.mktemp("xsd") / "1.01-local"
-    )
-    return localizar_xsd_dps(copia)
+def xsd():
+    return localizar_xsd_dps(XSD_DIR_PADRAO)
 
 
 def _verificar(xml: bytes, cert: Certificado):

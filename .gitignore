@@ -8,6 +8,5 @@ emitentes/*
 __pycache__/
 .venv/
 out/
-schemas/*-local/
 docs/referencia/*
 !docs/referencia/gov-docs/

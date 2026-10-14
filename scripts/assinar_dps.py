@@ -20,7 +20,6 @@ from src.codec import codificar, decodificar
 from src.config import carregar_config
 from src.dps import localizar_xsd_dps, para_xml, validar_xml
 from src.emitente import PASTA, carregar_emitente
-from src.xsd import preparar_copia_local
 
 
 def main(argv: list[str] | None = None, pasta: Path = PASTA, saida: Path = Path("out")) -> int:
@@ -49,7 +48,7 @@ def main(argv: list[str] | None = None, pasta: Path = PASTA, saida: Path = Path(
     if not localizar_xsd_dps(cfg.xsd_dir):
         print(f"[!] XSD não encontrado em {cfg.xsd_dir}. Veja schemas/LEIAME.md.", file=sys.stderr)
         return 2
-    xsd = localizar_xsd_dps(preparar_copia_local(cfg.xsd_dir))
+    xsd = localizar_xsd_dps(cfg.xsd_dir)
     erros = validar_xml(assinada, xsd)
     if erros:
         print(f"[X] DPS assinada inválida contra {xsd.name}:", file=sys.stderr)
@@ -69,7 +68,7 @@ def main(argv: list[str] | None = None, pasta: Path = PASTA, saida: Path = Path(
     b64_arq.write_text(empacotada, encoding="ascii")
 
     print(f"[OK] Assinatura conferida com o certificado de {cert.titular}")
-    print(f"[OK] Válida contra {xsd.name} (cópia local em {xsd.parent})")
+    print(f"[OK] Válida contra {xsd.name} ({xsd.parent})")
     print(f"[OK] GZip+Base64 com {len(empacotada)} caracteres; decodificado, é a mesma DPS")
     print(f"DPS assinada: {xml_arq}")
     print(f"GZip+Base64:  {b64_arq}")

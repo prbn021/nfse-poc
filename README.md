@@ -5,7 +5,7 @@ Prova de conceito de um emissor de NFS-e pela API NFS-e Nacional, em Python, no 
 O que existe hoje:
 
 - gera o XML de uma DPS de exemplo (dados fictícios) a partir de dataclasses;
-- valida esse XML offline contra uma cópia local do `DPS_v1.01.xsd`, que difere do oficial em uma linha (as âncoras `^` e `$` do padrão de `serie`).
+- valida esse XML offline contra o `DPS_v1.01.xsd` do pacote oficial de produção restrita (`schemas/v1.01-prodrest-20260727`), sem alteração.
 
 O que ainda não existe: assinatura, compactação, transmissão e consulta. Nada aqui emite nota, e passar no XSD não quer dizer que o servidor aceita a DPS. O estado do projeto, as decisões e as tarefas estão em [`docs/SPEC.md`](docs/SPEC.md).
 
@@ -66,7 +66,7 @@ Copy-Item .env.example .env
 O script grava a DPS em `out\DPS<42 dígitos>.xml`, imprime o XML e valida. A última linha esperada é:
 
 ```
-[OK] Válida contra DPS_v1.01.xsd (cópia local em ...\schemas\1.01-local)
+[OK] Válida contra DPS_v1.01.xsd (...\schemas\v1.01-prodrest-20260727)
 ```
 
 Código de saída: `0` válida, `1` inválida (os erros são listados), `2` XSD não encontrado em `NFSE_XSD_DIR`, emitente não encontrado ou com arquivo inválido, ou percentual inválido.
@@ -85,7 +85,7 @@ Serviços de construção civil e congêneres (07.02.01, 07.02.02, 07.04.01, 07.
 
 O modelo também aceita identificar a obra pelo CIB ou pelo endereço, mas os scripts só têm `--obra-cno`. Ele não confere o dígito verificador do CIB nem se o CEP da obra é do município da prestação; essas regras ficam com a SEFIN. Obra em outro município ou no exterior ainda não é tratada (T-021, T-022).
 
-A cópia local dos XSDs (`schemas\1.01-local`, fora do git) é refeita a cada execução. Para gerá-la sem gerar a DPS: `.\.venv\Scripts\python.exe scripts\preparar_xsd.py`.
+A validação usa direto o pacote oficial de XSDs ativo, `schemas\v1.01-prodrest-20260727` (o de produção restrita), apontado por `NFSE_XSD_DIR`. Como trocar de pacote: `schemas\LEIAME.md`.
 
 ## Emitentes
 
@@ -204,7 +204,7 @@ As outras verificações que toda mudança precisa passar (lista completa em `do
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\gerar_dps.py          # sai com código 0
-git diff --exit-code main -- schemas/1.01                # sem saída: XSDs intocados
+git diff --exit-code --no-renames --diff-filter=MT main -- schemas ':!schemas/LEIAME.md'   # sem saída: nenhum XSD oficial alterado (apagado ou renomeado: G-1)
 git diff --exit-code --diff-filter=DMRT main -- docs/referencia/gov-docs ':!docs/referencia/gov-docs/LEIAME.md' ':!docs/referencia/gov-docs/SHA256SUMS'   # sem saída: nenhum documento oficial alterado, apagado ou renomeado
 .\.venv\Scripts\python.exe scripts\checar_segredos.py    # nenhum .env, certificado, arquivo de emitente ou referência privada no git
 .\.venv\Scripts\python.exe -m ruff format --check .      # formatação; sem --check, corrige
@@ -222,7 +222,7 @@ As mesmas verificações rodam no GitHub Actions, em Windows, em toda PR (`.gith
 | `No module named pytest`      | Só o `requirements.txt` foi instalado. Rode o comando de instalação de "Preparar o ambiente", com os dois arquivos. |
 | Falha em `tests/test_lock.py` | O que está instalado na venv não bate com os locks. Rode de novo o comando de instalação.                           |
 | `ValueError` citando INV-02   | O `.env` tem `NFSE_AMBIENTE=producao`. Volte para `homologacao`.                                                    |
-| `[!] XSD não encontrado`      | `NFSE_XSD_DIR` no `.env` não aponta para `schemas/1.01`.                                                            |
+| `[!] XSD não encontrado`      | `NFSE_XSD_DIR` no `.env` não aponta para o pacote ativo. Copie a linha do `.env.example` (`schemas/1.01` saiu na T-038). |
 | `GET docs/index: 404` no `testar_conexao.py` | O `.env` tem a `NFSE_SEFIN_URL` antiga, sem `/SefinNacional`. Copie a linha do `.env.example`. |
 | `incompleto, falta: reg_ap_trib_sn` | O arquivo do emitente é de antes da T-010. Acrescente `reg_ap_trib_sn = 1` (veja `emitentes\exemplo.toml`). |
 | A venv ficou inconsistente    | Apague e recrie: `Remove-Item -Recurse -Force .venv`, depois os comandos de "Preparar o ambiente".                  |

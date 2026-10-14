@@ -9,6 +9,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 RAIZ = Path(__file__).resolve().parent.parent
+# Pacote oficial de XSD ativo, uma pasta de schemas/ (T-038, DEC-066). Trocar pede DEC.
+PACOTE_XSD = "schemas/v1.01-prodrest-20260727"
+XSD_DIR_PADRAO = RAIZ / PACOTE_XSD
 
 # tpAmb do XML da DPS: 1 = produção, 2 = homologação (produção restrita)
 TP_AMB = {"producao": 1, "homologacao": 2}
@@ -39,5 +42,5 @@ def carregar_config() -> Config:
         ambiente=ambiente,
         sefin_url=os.getenv("NFSE_SEFIN_URL", "").rstrip("/"),
         adn_url=os.getenv("NFSE_ADN_URL", "").rstrip("/"),
-        xsd_dir=RAIZ / os.getenv("NFSE_XSD_DIR", "schemas/1.01"),
+        xsd_dir=RAIZ / os.getenv("NFSE_XSD_DIR", PACOTE_XSD),
     )

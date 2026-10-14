@@ -42,7 +42,6 @@ from src.emitente import PASTA, carregar_emitente
 from src.erros import RejeicaoApi, RespostaInesperada
 from src.evento import CANCELAMENTO, SUBSTITUICAO, conferir_substituicao, localizar_xsd_evento
 from src.nfse import conferir_nfse, localizar_xsd_nfse, resumo_da_dps
-from src.xsd import preparar_copia_local
 
 # Códigos de saída, além de 0 (emitida e conferida) e 1 (erro antes do envio).
 ERRO_DE_REDE = 3  # nada foi gerado; a DPS pode ser enviada de novo
@@ -213,9 +212,9 @@ def main(
         _erro(str(erro))
         return 1
 
-    xsd_local = preparar_copia_local(config.xsd_dir)
-    xsd_dps, xsd_nfse = localizar_xsd_dps(xsd_local), localizar_xsd_nfse(xsd_local)
-    xsd_evento = localizar_xsd_evento(xsd_local)
+    xsd_dir = config.xsd_dir
+    xsd_dps, xsd_nfse = localizar_xsd_dps(xsd_dir), localizar_xsd_nfse(xsd_dir)
+    xsd_evento = localizar_xsd_evento(xsd_dir)
     if xsd_dps is None or xsd_nfse is None or xsd_evento is None:
         _erro(f"XSD da DPS, da NFS-e ou do evento não encontrado em {config.xsd_dir}")
         return 1

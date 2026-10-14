@@ -9,9 +9,8 @@ import pytest
 from signxml import SignatureConfiguration, XMLVerifier
 
 from src.codec import decodificar
-from src.config import RAIZ
+from src.config import RAIZ, XSD_DIR_PADRAO
 from src.dps import localizar_xsd_dps, validar_xml
-from src.xsd import preparar_copia_local
 from tests.pfx import CNPJ, gerar_certificado, gerar_pfx
 
 sys.path.insert(0, str(RAIZ / "scripts"))
@@ -50,7 +49,7 @@ def test_dps_de_exemplo_sai_assinada_e_em_gzip_base64(pastas, capsys):
     assert decodificar(b64_arq.read_text(encoding="ascii")) == xml
 
     # Conferência independente do script: XSD e assinatura com o certificado de teste.
-    xsd = localizar_xsd_dps(preparar_copia_local(RAIZ / "schemas" / "1.01", saida / "xsd"))
+    xsd = localizar_xsd_dps(XSD_DIR_PADRAO)
     assert validar_xml(xml, xsd) == []
     resultado = XMLVerifier().verify(
         xml, x509_cert=gerar_certificado(), expect_config=SignatureConfiguration(location="./")

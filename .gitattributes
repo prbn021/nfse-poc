@@ -2,3 +2,5 @@
 *.xlsx binary
 # Dados golden dos testes: comparados byte a byte, sem conversão de fim de linha.
 tests/dados/** -text
+# Pacotes oficiais de XSD: os bytes do zip, sem conversão de fim de linha (T-038).
+schemas/** -text

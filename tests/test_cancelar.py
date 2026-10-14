@@ -15,7 +15,7 @@ from lxml import etree
 
 from src.assinatura import conferir_assinatura
 from src.codec import codificar, decodificar
-from src.config import RAIZ, Config
+from src.config import RAIZ, XSD_DIR_PADRAO, Config
 from src.dps import NS
 from tests.evento_ficticio import gerar_evento
 from tests.nfse_ficticia import CHAVE
@@ -40,7 +40,7 @@ def config(ambiente="homologacao") -> Config:
         ambiente=ambiente,
         sefin_url=BASE,
         adn_url="https://adn.producaorestrita.nfse.gov.br",
-        xsd_dir=RAIZ / "schemas" / "1.01",
+        xsd_dir=XSD_DIR_PADRAO,
     )
 
 

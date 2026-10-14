@@ -153,7 +153,7 @@ def test_b2_import_que_nao_e_de_rede_passa(codigo):
         "import scripts.gerar_dps\n",
         "from scripts import gerar_dps\n",
         "from scripts.gerar_dps import main\n",
-        "def f():\n    from scripts.preparar_xsd import main\n    return main\n",
+        "def f():\n    from scripts.gerar_dps import main\n    return main\n",
     ],
 )
 def test_b3_src_importa_de_scripts(codigo):

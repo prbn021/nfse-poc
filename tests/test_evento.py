@@ -2,19 +2,15 @@
 
 import pytest
 
-from src.config import RAIZ
+from src.config import XSD_DIR_PADRAO
 from src.evento import conferir_evento, localizar_xsd_evento
-from src.xsd import preparar_copia_local
 from tests.evento_ficticio import CANCELAMENTO, gerar_evento
 from tests.nfse_ficticia import CHAVE
 
 
 @pytest.fixture(scope="module")
-def xsd(tmp_path_factory):
-    copia = preparar_copia_local(
-        RAIZ / "schemas" / "1.01", tmp_path_factory.mktemp("xsd") / "1.01-local"
-    )
-    return localizar_xsd_evento(copia)
+def xsd():
+    return localizar_xsd_evento(XSD_DIR_PADRAO)
 
 
 @pytest.fixture(scope="module")

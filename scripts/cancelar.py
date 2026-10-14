@@ -34,7 +34,6 @@ from src.evento import (
     localizar_xsd_pedido_evento,
     para_xml_pedido,
 )
-from src.xsd import preparar_copia_local
 
 # Códigos de saída, os mesmos do emitir.py: 0 cancelada e conferida (ou, sem --confirmar,
 # pedido assinado e salvo); 1 erro antes do envio.
@@ -170,8 +169,8 @@ def main(
         _erro(str(erro))
         return 1
 
-    xsd_local = preparar_copia_local(config.xsd_dir)
-    xsd_pedido, xsd_evento = localizar_xsd_pedido_evento(xsd_local), localizar_xsd_evento(xsd_local)
+    xsd_dir = config.xsd_dir
+    xsd_pedido, xsd_evento = localizar_xsd_pedido_evento(xsd_dir), localizar_xsd_evento(xsd_dir)
     if xsd_pedido is None or xsd_evento is None:
         _erro(f"XSD do pedido de evento ou do evento não encontrado em {config.xsd_dir}")
         return 1
