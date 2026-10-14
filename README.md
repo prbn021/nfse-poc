@@ -204,7 +204,7 @@ As outras verificações que toda mudança precisa passar (lista completa em `do
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\gerar_dps.py          # sai com código 0
-git diff --exit-code --diff-filter=DMRT main -- schemas ':!schemas/LEIAME.md'   # sem saída: nenhum XSD oficial alterado, apagado ou renomeado
+git diff --exit-code --no-renames --diff-filter=MT main -- schemas ':!schemas/LEIAME.md'   # sem saída: nenhum XSD oficial alterado (apagado ou renomeado: G-1)
 git diff --exit-code --diff-filter=DMRT main -- docs/referencia/gov-docs ':!docs/referencia/gov-docs/LEIAME.md' ':!docs/referencia/gov-docs/SHA256SUMS'   # sem saída: nenhum documento oficial alterado, apagado ou renomeado
 .\.venv\Scripts\python.exe scripts\checar_segredos.py    # nenhum .env, certificado, arquivo de emitente ou referência privada no git
 .\.venv\Scripts\python.exe -m ruff format --check .      # formatação; sem --check, corrige

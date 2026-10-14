@@ -43,10 +43,11 @@ jobs:
         run: git fetch --no-tags --depth=1 origin main:main
 
       # Dois passos: o pwsh do Actions só olha o código de saída do último comando.
-      # Pacote novo é permitido; alterar, apagar ou renomear arquivo de um pacote, não (DEC-066).
+      # Pacote novo é permitido; alterar arquivo de um pacote, não (DEC-066, DEC-067). Sem
+      # detecção de renomeação; arquivo apagado ou renomeado é barrado em G-1 (tests/test_schemas.py).
       - name: G-3 XSDs intocados
         if: github.event_name == 'pull_request'
-        run: git diff --exit-code --diff-filter=DMRT main -- schemas ':!schemas/LEIAME.md'
+        run: git diff --exit-code --no-renames --diff-filter=MT main -- schemas ':!schemas/LEIAME.md'
 
       # Documento oficial novo é permitido; alterar, apagar ou renomear um existente, não (DEC-064).
       - name: G-3 documentação oficial intocada

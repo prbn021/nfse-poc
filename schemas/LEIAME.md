@@ -3,8 +3,8 @@
 Cada pacote oficial de XSDs fica numa pasta própria, com o nome do pacote, e com todos os
 `.xsd` do zip, sem nenhuma alteração (o DPS importa os demais: tipos simples, tipos complexos,
 xmldsig-core-schema). O `SHA256SUMS` de cada pasta lista os arquivos e o SHA-256 de cada um;
-o `tests/test_schemas.py` o confere em G-1, e o G-3 recusa arquivo de pacote alterado, apagado
-ou renomeado (INV-01, DEC-066). A pasta `schemas/` não tem cópia derivada.
+o `tests/test_schemas.py` o confere em G-1 (e recusa arquivo apagado ou renomeado e pacote
+fora da lista), e o G-3 recusa arquivo de pacote alterado (INV-01, DEC-066, DEC-067). A pasta `schemas/` não tem cópia derivada.
 
 ## Pacotes no repositório
 
