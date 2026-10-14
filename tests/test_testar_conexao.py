@@ -292,6 +292,90 @@ def test_adn_fora_da_producao_restrita_e_recusado(tmp_path, capsys, adn_url):
     assert "NFSE_ADN_URL" in err
 
 
+# --- DANFSe no ADN (T-032) -----------------------------------------------------------------
+
+INDEX_JS_DANFSE = b"Redoc.init('/danfse/docs/v1/swagger.json', {}, document.getElementById('x'))"
+OPENAPI_DANFSE = {
+    "swagger": "2.0",
+    "host": "adn.producaorestrita.nfse.gov.br",
+    "basePath": "/danfse",
+    "paths": {"/{chaveAcesso}": {}},
+}
+
+
+def servidor_danfse(pedidos: list, *, pagina=PAGINA_ADN_REAL):
+    def responder(pedido: httpx.Request) -> httpx.Response:
+        pedidos.append((pedido.method, str(pedido.url)))
+        caminho = pedido.url.path
+        if caminho == "/danfse/docs/index.html":
+            return httpx.Response(200, headers={"content-type": "text/html"}, content=pagina)
+        if caminho == "/danfse/docs/index.js":
+            return httpx.Response(
+                200, headers={"content-type": "text/javascript"}, content=INDEX_JS_DANFSE
+            )
+        if caminho == "/danfse/docs/v1/swagger.json":
+            return httpx.Response(200, json=OPENAPI_DANFSE)
+        return httpx.Response(404)
+
+    return httpx.MockTransport(responder)
+
+
+def rodar_danfse(tmp_path, transporte, *, cfg=None):
+    pasta = tmp_path / "emitentes"
+    pasta.mkdir(exist_ok=True)
+    emitente(pasta)
+    return testar_conexao.main(
+        ["--emitente", "acme", "--api", "danfse"],
+        pasta=pasta,
+        config=cfg or config(),
+        transporte=transporte,
+        saida=tmp_path / "out",
+    )
+
+
+def test_danfse_baixa_documentacao_e_especificacao_do_adn(tmp_path, capsys):
+    pedidos = []
+    assert rodar_danfse(tmp_path, servidor_danfse(pedidos)) == 0
+    # Só a documentação: nada de consulta de DPS nem de DANFSe.
+    assert pedidos == [
+        ("GET", f"{ADN}/danfse/docs/index.html"),
+        ("GET", f"{ADN}/danfse/docs/index.js"),
+        ("GET", f"{ADN}/danfse/docs/v1/swagger.json"),
+    ]
+    saida = capsys.readouterr()
+    assert saida.err == ""
+    linhas = saida.out.splitlines()
+    assert linhas[0] == f"ADN: {ADN}"
+    assert "host: adn.producaorestrita.nfse.gov.br, basePath: /danfse" in linhas
+    assert "rotas: /{chaveAcesso}" in linhas
+    saida_dir = tmp_path / "out"
+    assert (saida_dir / "adn-danfse-docs-index.html").read_bytes() == PAGINA_ADN_REAL
+    assert (saida_dir / "adn-danfse-index.js").read_bytes() == INDEX_JS_DANFSE
+    assert json.loads((saida_dir / "adn-danfse-openapi.json").read_text()) == OPENAPI_DANFSE
+
+
+def test_danfse_nao_segue_link_fora_da_url_base(tmp_path, capsys):
+    pedidos = []
+    pagina = b"openApi: 'https://exemplo.invalid/swagger.json'"
+    assert rodar_danfse(tmp_path, servidor_danfse(pedidos, pagina=pagina)) == 0
+    assert pedidos == [("GET", f"{ADN}/danfse/docs/index.html")]
+    assert "OpenAPI: link fora da URL base, não seguido" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "adn_url",
+    ["https://adn.nfse.gov.br", "http://adn.producaorestrita.nfse.gov.br", ""],
+)
+def test_danfse_fora_da_producao_restrita_e_recusado(tmp_path, capsys, adn_url):
+    pedidos = []
+    cfg = Config("homologacao", BASE, adn_url, Path("x"))
+    assert rodar_danfse(tmp_path, servidor_danfse(pedidos), cfg=cfg) == 1
+    assert pedidos == []
+    err = capsys.readouterr().err
+    assert "INV-02" in err
+    assert "NFSE_ADN_URL" in err
+
+
 def test_api_desconhecida_e_recusada(capsys):
     with pytest.raises(SystemExit) as saida:
         testar_conexao.main(["--emitente", "acme", "--api", "outra"])
