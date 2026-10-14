@@ -27,6 +27,8 @@ PAGINA = "docs/index"
 APIS = {
     "sefin": ("sefin", "SEFIN", PAGINA, "sefin"),
     "parametrizacao": ("adn", "ADN", "parametrizacao/docs/index.html", "adn-parametrizacao"),
+    # O DANFSe também saiu da SEFIN: GET /DANFSe responde 501 e aponta para o ADN (T-032).
+    "danfse": ("adn", "ADN", "danfse/docs/index.html", "adn-danfse"),
 }
 # Série e número que nenhuma DPS usa: a consulta deve responder que não existe.
 SERIE_FICTICIA, NUMERO_FICTICIO = 49999, 999_999_999_999_999
@@ -112,7 +114,8 @@ def main(
         choices=sorted(APIS),
         default="sefin",
         help="sefin (padrão): documentação, especificação e HEAD de uma DPS; "
-        "parametrizacao: documentação e especificação da parametrização municipal no ADN",
+        "parametrizacao: documentação e especificação da parametrização municipal no ADN; "
+        "danfse: documentação e especificação da API de DANFSe no ADN",
     )
     args = parser.parse_args(argv)
     api, rotulo, onde, prefixo = APIS[args.api]
