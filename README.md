@@ -204,7 +204,8 @@ As outras verificações que toda mudança precisa passar (lista completa em `do
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\gerar_dps.py          # sai com código 0
-git diff --exit-code main -- schemas/1.01 docs/referencia/gov-docs   # sem saída: XSDs e documentação oficial intocados
+git diff --exit-code main -- schemas/1.01                # sem saída: XSDs intocados
+git diff --exit-code --diff-filter=DMRT main -- docs/referencia/gov-docs ':!docs/referencia/gov-docs/LEIAME.md' ':!docs/referencia/gov-docs/SHA256SUMS'   # sem saída: nenhum documento oficial alterado, apagado ou renomeado
 .\.venv\Scripts\python.exe scripts\checar_segredos.py    # nenhum .env, certificado, arquivo de emitente ou referência privada no git
 .\.venv\Scripts\python.exe -m ruff format --check .      # formatação; sem --check, corrige
 .\.venv\Scripts\python.exe -m ruff check .               # lint; qualquer apontamento é erro
