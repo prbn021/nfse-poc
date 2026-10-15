@@ -102,9 +102,13 @@ class Servidor:
         return httpx.Response(404)
 
 
+# Códigos do grupo IBS/CBS (T-034): a linha do Anexo VIII para o item 01.01, fictícia aqui.
+IBSCBS = ["--c-ind-op", "100301", "--c-class-trib", "000001", "--c-nbs", "1.1502.10.00"]
+
+
 def rodar(emitentes, tmp_path, servidor, *args, ambiente="homologacao", c_trib_nac="990101"):
     # 990101: código fictício, só para os testes.
-    argv = ["--emitente", "acme", "--n-dps", "7", "--c-trib-nac", c_trib_nac, *args]
+    argv = ["--emitente", "acme", "--n-dps", "7", "--c-trib-nac", c_trib_nac, *IBSCBS, *args]
     return emitir.main(
         argv,
         pasta=emitentes,
@@ -166,7 +170,7 @@ def test_sem_o_codigo_de_tributacao_nao_envia(emitentes, tmp_path, capsys):
     servidor = Servidor()
     with pytest.raises(SystemExit) as saida:
         emitir.main(
-            ["--emitente", "acme", "--n-dps", "7"],
+            ["--emitente", "acme", "--n-dps", "7", *IBSCBS],
             pasta=emitentes,
             config=config(),
             transporte=httpx.MockTransport(servidor),
@@ -327,7 +331,7 @@ def test_producao_e_recusada_antes_de_qualquer_chamada(emitentes, tmp_path, caps
 
 def test_numero_invalido_nao_envia(emitentes, tmp_path, capsys):
     servidor = Servidor()
-    argv = ["--emitente", "acme", "--n-dps", "0", "--c-trib-nac", "990101"]
+    argv = ["--emitente", "acme", "--n-dps", "0", "--c-trib-nac", "990101", *IBSCBS]
     codigo = emitir.main(
         argv,
         pasta=emitentes,
@@ -344,12 +348,57 @@ def test_numero_invalido_nao_envia(emitentes, tmp_path, capsys):
     "argv",
     [
         [],
-        ["--emitente", "acme", "--c-trib-nac", "990101"],
-        ["--n-dps", "1", "--c-trib-nac", "990101"],
-        ["--emitente", "acme", "--n-dps", "1"],
+        ["--emitente", "acme", "--c-trib-nac", "990101", *IBSCBS],
+        ["--n-dps", "1", "--c-trib-nac", "990101", *IBSCBS],
+        ["--emitente", "acme", "--n-dps", "1", *IBSCBS],
+        ["--emitente", "acme", "--n-dps", "1", "--c-trib-nac", "990101", "--c-ind-op", "100301"],
+        ["--emitente", "acme", "--n-dps", "1", "--c-trib-nac", "990101", *IBSCBS[:4]],
+        [
+            "--emitente",
+            "acme",
+            "--n-dps",
+            "1",
+            "--c-trib-nac",
+            "990101",
+            "--c-class-trib",
+            "000001",
+        ],
     ],
 )
 def test_emitente_numero_e_codigo_sao_obrigatorios(argv, capsys):
     with pytest.raises(SystemExit) as saida:
         emitir.main(argv)
     assert saida.value.code == 2
+
+
+# --- grupo IBS/CBS (T-034, DEC-069) ------------------------------------------------------
+
+
+def test_dps_enviada_leva_o_grupo_ibscbs_dos_argumentos(emitentes, tmp_path):
+    # Códigos do Anexo VIII para o item 17.19 (fictício aqui): CST derivado do cClassTrib.
+    servidor = Servidor()
+    args = ["--c-ind-op", "100301", "--c-class-trib", "200052", "--c-nbs", "123012300"]
+    assert rodar(emitentes, tmp_path, servidor, *args) == 0
+    inf = etree.fromstring(servidor.dps_recebida).find("n:infDPS", N)
+    # O NBS vai com ou sem os pontos do Anexo VIII; na DPS, 9 dígitos (E0322).
+    assert inf.findtext("n:serv/n:cServ/n:cNBS", namespaces=N) == "123012300"
+    grupo = inf.find("n:IBSCBS", N)
+    assert grupo.findtext("n:cIndOp", namespaces=N) == "100301"
+    g = grupo.find("n:valores/n:trib/n:gIBSCBS", N)
+    assert [el.text for el in g] == ["200", "200052"]
+
+
+@pytest.mark.parametrize(
+    ("args", "texto"),
+    [
+        (["--c-ind-op", "080101"], "E0901"),
+        (["--c-ind-op", "020101"], "E0932"),
+        (["--c-class-trib", "12345"], "c_class_trib"),
+        (["--c-nbs", "1.2301.23"], "c_nbs"),
+    ],
+)
+def test_codigos_ibscbs_invalidos_nao_enviam(emitentes, tmp_path, capsys, args, texto):
+    servidor = Servidor()
+    assert rodar(emitentes, tmp_path, servidor, *args) == 1
+    assert servidor.pedidos == []
+    assert texto in capsys.readouterr().err

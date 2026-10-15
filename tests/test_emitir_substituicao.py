@@ -100,6 +100,7 @@ class ServidorSubst(Servidor):
 
 def rodar(emitentes, tmp_path, servidor, *args, chave=CHAVE_SUBST, ambiente="homologacao"):  # noqa: F811
     argv = ["--emitente", "acme", "--n-dps", "4", "--c-trib-nac", "990101"]
+    argv += ["--c-ind-op", "100301", "--c-class-trib", "000001", "--c-nbs", "115021000"]
     if chave is not None:
         argv += ["--substituir", chave]
     return emitir.main(
@@ -255,3 +256,12 @@ def test_producao_e_recusada_com_substituicao(emitentes, tmp_path, capsys):  # n
     assert rodar(emitentes, tmp_path, servidor, *MOTIVO_99, ambiente="producao") == 1
     assert servidor.pedidos == []
     assert "INV-02" in capsys.readouterr().err
+
+
+def test_dps_substituta_leva_o_grupo_ibscbs(emitentes, tmp_path):  # noqa: F811
+    # T-034: a competência copiada (2026-10-12) exige o grupo (E0855).
+    servidor = ServidorSubst(_nfse_original(emitentes))
+    assert rodar(emitentes, tmp_path, servidor, *MOTIVO_99) == 0
+    inf = etree.fromstring(servidor.dps_recebida).find("n:infDPS", N)
+    assert inf.findtext("n:dCompet", namespaces=N) == COMPETENCIA.isoformat()
+    assert inf.findtext("n:IBSCBS/n:cIndOp", namespaces=N) == "100301"

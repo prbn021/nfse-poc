@@ -12,6 +12,7 @@ from src.dps import (
     NS,
     Dps,
     EnderecoObra,
+    IbsCbs,
     Obra,
     PisCofins,
     Prestador,
@@ -30,6 +31,8 @@ N = {"n": NS}
 
 # Dados FICTÍCIOS.
 CPF_FICTICIO = "12345678909"
+# NBS do item 01.01 no Anexo VIII (1.1502.10.00), exigido com o grupo IBS/CBS (E0322).
+NBS = "115021000"
 
 
 def _prestador(**over) -> Prestador:
@@ -52,6 +55,13 @@ def _valores(**over) -> Valores:
     return Valores(**base)
 
 
+def _ibs_cbs(**over) -> IbsCbs:
+    # Linha do Anexo VIII para o item 01.01 (fictício como o resto): 100301 e 000001 (T-034).
+    base = dict(c_ind_op="100301", c_class_trib="000001")
+    base.update(over)
+    return IbsCbs(**base)
+
+
 def _dps(**over) -> Dps:
     base = dict(
         tp_amb=2,
@@ -62,8 +72,12 @@ def _dps(**over) -> Dps:
         dh_emi=datetime(2026, 10, 7, 10, 0, 0, tzinfo=BRT),
         prestador=_prestador(),
         tomador=Tomador(nome="Cliente", cnpj="99888777000161"),
-        servico=Servico(c_loc_prestacao="3304557", c_trib_nac="010101", descricao="Serviço"),
+        # NBS do item 01.01 no Anexo VIII (fictício como o resto), exigido com o grupo (E0322).
+        servico=Servico(
+            c_loc_prestacao="3304557", c_trib_nac="010101", descricao="Serviço", c_nbs=NBS
+        ),
         valores=_valores(),
+        ibs_cbs=_ibs_cbs(),  # obrigatório com competência a partir de 01/10/2026 (E0855)
     )
     base.update(over)
     return Dps(**base)
@@ -235,7 +249,9 @@ def test_dps_de_emitentes_diferentes_e_valida(xsd, emitente, tomador):
         c_loc_emi=municipio,
         prestador=_prestador(cnpj=cnpj, inscricao_municipal=im),
         tomador=tomador,
-        servico=Servico(c_loc_prestacao=municipio, c_trib_nac=c_trib_nac, descricao=descricao),
+        servico=Servico(
+            c_loc_prestacao=municipio, c_trib_nac=c_trib_nac, descricao=descricao, c_nbs=NBS
+        ),
     )
     xml = para_xml(dps)
     assert validar_xml(xml, xsd) == []
@@ -264,7 +280,7 @@ def test_nenhum_default_de_src_carrega_dado_de_emitente():
     # restantes são do leiaute ou da nota, não de um emitente.
     assert _defaults(Prestador) == {}
     assert _defaults(Tomador) == {"cnpj": None, "cpf": None}
-    assert _defaults(Servico) == {"c_trib_mun": None, "obra": None}
+    assert _defaults(Servico) == {"c_trib_mun": None, "obra": None, "c_nbs": None}
     assert _defaults(Obra) == {
         "c_obra": None,
         "c_cib": None,
@@ -280,7 +296,13 @@ def test_nenhum_default_de_src_carrega_dado_de_emitente():
     }
     assert _defaults(PisCofins) == {"tp_ret_pis_cofins": None}
     assert _defaults(Substituicao) == {"x_motivo": None}
-    assert _defaults(Dps) == {"ver_aplic": "nfse-poc-0.1", "tp_emit": 1, "subst": None}
+    assert _defaults(IbsCbs) == {"ind_final": None}
+    assert _defaults(Dps) == {
+        "ver_aplic": "nfse-poc-0.1",
+        "tp_emit": 1,
+        "subst": None,
+        "ibs_cbs": None,
+    }
 
 
 # --- faixa de `serie` (T-014, DEC-019) -------------------------------------------------------
@@ -305,6 +327,7 @@ def test_serie_fora_da_faixa_do_aplicativo_proprio_e_recusada(serie):
 # --- campos opcionais usados nas notas atuais (T-018, DEC-023) -------------------------------
 
 GOLDEN = Path(__file__).parent / "dados" / "dps-sem-opcionais.xml"
+GOLDEN_IBSCBS = Path(__file__).parent / "dados" / "dps-com-ibscbs.xml"
 EMAIL = "contato@empresa-ficticia.com.br"
 FONE = "2133334444"
 
@@ -313,15 +336,20 @@ def _dps_completa(**valores) -> Dps:
     return _dps(
         prestador=_prestador(fone=FONE, email=EMAIL),
         servico=Servico(
-            c_loc_prestacao="3304557", c_trib_nac="010101", c_trib_mun="001", descricao="Serviço"
+            c_loc_prestacao="3304557",
+            c_trib_nac="010101",
+            c_trib_mun="001",
+            descricao="Serviço",
+            c_nbs=NBS,
         ),
         valores=_valores(pis_cofins=PisCofins(cst="08", tp_ret_pis_cofins=0), **valores),
     )
 
 
 def test_sem_os_campos_opcionais_o_xml_e_igual_ao_de_antes():
-    # Golden gerado pelo código de antes da T-018, com o mesmo _dps().
-    assert para_xml(_dps()) == GOLDEN.read_bytes()
+    # Golden gerado pelo código de antes da T-018, mais o grupo IBS/CBS mínimo (T-034;
+    # tests/test_ibscbs.py confere que só o grupo foi acrescentado).
+    assert para_xml(_dps()) == GOLDEN_IBSCBS.read_bytes()
 
 
 def test_campos_opcionais_nas_posicoes_do_xsd(xsd):
@@ -329,7 +357,7 @@ def test_campos_opcionais_nas_posicoes_do_xsd(xsd):
     assert validar_xml(xml, xsd) == []
     raiz = etree.fromstring(xml)
     assert _filhos(raiz, "n:infDPS/n:prest") == ["CNPJ", "IM", "fone", "email", "regTrib"]
-    assert _filhos(raiz, "n:infDPS/n:serv/n:cServ") == ["cTribNac", "cTribMun", "xDescServ"]
+    assert _filhos(raiz, "n:infDPS/n:serv/n:cServ") == ["cTribNac", "cTribMun", "xDescServ", "cNBS"]
     assert _filhos(raiz, "n:infDPS/n:valores/n:trib") == ["tribMun", "tribFed", "totTrib"]
     piscofins = "n:infDPS/n:valores/n:trib/n:tribFed/n:piscofins"
     assert _filhos(raiz, "n:infDPS/n:valores/n:trib/n:tribFed") == ["piscofins"]
@@ -425,7 +453,7 @@ SUBITENS_DE_OBRA = [
 
 
 def _servico(c_trib_nac="070202", **over) -> Servico:
-    base = dict(c_loc_prestacao="3304557", c_trib_nac=c_trib_nac, descricao="Obra")
+    base = dict(c_loc_prestacao="3304557", c_trib_nac=c_trib_nac, descricao="Obra", c_nbs=NBS)
     base.update(over)
     return Servico(**base)
 
@@ -490,7 +518,7 @@ def test_endereco_da_obra_no_xml(xsd):
 
 
 def test_sem_obra_o_xml_continua_igual_ao_golden():
-    assert para_xml(_dps()) == GOLDEN.read_bytes()
+    assert para_xml(_dps()) == GOLDEN_IBSCBS.read_bytes()
 
 
 def test_obra_sem_identificacao_e_recusada():
