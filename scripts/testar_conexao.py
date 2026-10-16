@@ -16,10 +16,11 @@ from urllib.parse import urljoin, urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.certificado import carregar_certificado
-from src.client import ClienteNfse, ErroConexao
+from src.client import ClienteNfse
 from src.config import RAIZ, Config, carregar_config
 from src.dps import gerar_id
 from src.emitente import PASTA, carregar_emitente
+from src.erros import ErroConexao
 
 PAGINA = "docs/index"
 # Com --api: qual API, a página de documentação dela e o prefixo dos arquivos em out/.

@@ -17,10 +17,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.certificado import carregar_certificado
-from src.client import ClienteNfse, ConsultaParametros, ErroConexao
+from src.client import ClienteNfse, ConsultaParametros
 from src.config import RAIZ, Config, carregar_config
 from src.emitente import PASTA, carregar_emitente
-from src.erros import RespostaInesperada
+from src.erros import ErroConexao, RespostaInesperada
 from src.lista_servicos import localizar_anexo_b, servicos_nacionais
 
 GOV_DOCS = RAIZ / "docs" / "referencia" / "gov-docs"

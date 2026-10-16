@@ -12,9 +12,8 @@ import pytest
 from src.assinatura import assinar_pedido_evento
 from src.cancelamento import CancelamentoIncerto, NotaJaCancelada, cancelar
 from src.certificado import Certificado
-from src.client import ErroConexao
 from src.config import XSD_DIR_PADRAO
-from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
+from src.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
 from src.evento import localizar_xsd_evento
 from tests.evento_ficticio import gerar_evento
 from tests.nfse_ficticia import CHAVE

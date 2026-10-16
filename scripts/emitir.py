@@ -28,7 +28,7 @@ from gerar_dps import P_TOT_TRIB_SN_FICTICIO, _decimal, dps_exemplo, nbs
 
 from src.assinatura import assinar_dps, conferir_assinatura
 from src.certificado import carregar_certificado
-from src.client import ClienteNfse, ErroConexao
+from src.client import ClienteNfse
 from src.config import RAIZ, Config, carregar_config
 from src.dps import (
     MOTIVOS_SUBSTITUICAO,
@@ -40,7 +40,7 @@ from src.dps import (
 )
 from src.emissao import DpsJaEmitida, EnvioIncerto, emitir
 from src.emitente import PASTA, carregar_emitente
-from src.erros import RejeicaoApi, RespostaInesperada
+from src.erros import ErroConexao, RejeicaoApi, RespostaInesperada
 from src.evento import CANCELAMENTO, SUBSTITUICAO, conferir_substituicao, localizar_xsd_evento
 from src.nfse import conferir_nfse, localizar_xsd_nfse, resumo_da_dps
 

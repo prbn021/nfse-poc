@@ -18,11 +18,11 @@ from lxml import etree
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.certificado import carregar_certificado
-from src.client import ClienteNfse, ErroConexao
+from src.client import ClienteNfse
 from src.config import RAIZ, Config, carregar_config
 from src.dps import NS
 from src.emitente import PASTA, carregar_emitente
-from src.erros import RejeicaoApi, RespostaInesperada
+from src.erros import ErroConexao, RejeicaoApi, RespostaInesperada
 from src.evento import conferir_evento, localizar_xsd_evento
 from src.nfse import conferir_nfse, localizar_xsd_nfse
 

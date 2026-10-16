@@ -1,4 +1,4 @@
-"""Confere as boundaries de docs/SPEC.md §3 a partir dos imports de src/ e scripts/ (T-016, T-015).
+"""Confere as boundaries de docs/SPEC.md §3 pelos imports de src/ e scripts/ (T-016, T-015, T-042).
 
 Lê só os `import` e `from ... import` do código, em qualquer nível (inclusive dentro de
 função ou de `try`). Import feito por nome em texto (`importlib.import_module`, `__import__`)
@@ -6,6 +6,7 @@ não é visto.
 """
 
 import ast
+import sys
 from collections import deque
 from pathlib import Path, PurePosixPath
 
@@ -47,6 +48,15 @@ SCRIPTS = "scripts"
 
 # B-1: o que src/dps.py não pode alcançar, nem por intermédio de outro módulo de src/.
 PROIBIDO_PARA_DPS = REDE | CERTIFICADO | {CLIENT}
+
+# B-5 (T-042, DEC-077): src/aplicacao/ só importa biblioteca padrão, domínio e a si mesma.
+APLICACAO = "src.aplicacao"
+DOMINIO = "src.dominio"
+# Módulos que a arquitetura-alvo põe no domínio e que ainda estão soltos em src/; a lista
+# só encolhe, e a T-043, que os leva para src/dominio/, a esvazia.
+DOMINIO_FORA_DO_LUGAR = frozenset(
+    {"src.dps", "src.nfse", "src.evento", "src.erros", "src.lista_servicos"}
+)
 
 
 def ler_fontes(raiz: Path) -> dict[str, str]:
@@ -108,9 +118,34 @@ def _b1(deps: dict[str, set[str]]) -> set[str]:
     return achadas
 
 
+def _dentro(nome: str, pacote: str) -> bool:
+    return nome == pacote or nome.startswith(pacote + ".")
+
+
+def _permitido_na_aplicacao(alvo: str) -> bool:
+    if alvo == "src" or alvo.split(".")[0] in sys.stdlib_module_names:
+        return True
+    return any(_dentro(alvo, ok) for ok in (APLICACAO, DOMINIO, *DOMINIO_FORA_DO_LUGAR))
+
+
+def _b5(nome: str, importados: set[str]) -> set[str]:
+    """Aponta só o nome mais curto proibido: `src.client.X` aparece como `src.client`."""
+    proibidos = {alvo for alvo in importados if not _permitido_na_aplicacao(alvo)}
+    return {
+        f"B-5: {nome} -> {alvo}"
+        for alvo in proibidos
+        if not any(acima in proibidos for acima in _prefixos(alvo)[:-1])
+    }
+
+
+def dependencias(fontes: dict[str, str]) -> dict[str, set[str]]:
+    """Nome de cada módulo -> os nomes que ele importa (diretamente)."""
+    return dict(_dependencias(caminho, codigo) for caminho, codigo in fontes.items())
+
+
 def violacoes(fontes: dict[str, str]) -> list[str]:
     """Aponta cada import que cruza uma boundary, no formato `B-n: módulo -> ... -> alvo`."""
-    deps = dict(_dependencias(caminho, codigo) for caminho, codigo in fontes.items())
+    deps = dependencias(fontes)
 
     achadas = _b1(deps)
     for nome, importados in deps.items():
@@ -119,4 +154,6 @@ def violacoes(fontes: dict[str, str]) -> list[str]:
         # B-3 vale para src/; scripts/ pode depender de si mesmo.
         if not nome.startswith(SCRIPTS + ".") and SCRIPTS in importados:
             achadas.add(f"B-3: {nome} -> {SCRIPTS}")
+        if _dentro(nome, APLICACAO):
+            achadas.update(_b5(nome, importados))
     return sorted(achadas)

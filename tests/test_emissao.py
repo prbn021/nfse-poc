@@ -10,10 +10,9 @@ import pytest
 
 from src.assinatura import assinar_dps
 from src.certificado import Certificado
-from src.client import ErroConexao
 from src.config import XSD_DIR_PADRAO
 from src.emissao import DpsJaEmitida, EnvioIncerto, emitir
-from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
+from src.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
 from src.nfse import NfseEmitida, localizar_xsd_nfse
 from tests.nfse_ficticia import CHAVE, gerar_nfse
 from tests.pfx import chave_de_teste, gerar_certificado

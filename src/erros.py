@@ -1,4 +1,4 @@
-"""Erros devolvidos pela API da SEFIN Nacional (T-007).
+"""Erros devolvidos pela API da SEFIN Nacional (T-007) e falha de conexão com ela (T-042).
 
 A API responde erros com uma lista de `MensagemProcessamento` (`codigo`, `descricao`,
 `complemento`), conforme a especificação servida por ela (docs/SOURCES.md). As mensagens
@@ -19,6 +19,14 @@ class MensagemApi:
     def __str__(self) -> str:
         texto = f"{self.codigo}: {self.descricao}"
         return f"{texto} ({self.complemento})" if self.complemento else texto
+
+
+class ErroConexao(Exception):
+    """Falha de rede ou de TLS: a requisição não recebeu resposta HTTP.
+
+    Levantada por `src/client.py`; fica aqui, e não no cliente, para os serviços de envio
+    tratarem a queda sem depender do adaptador de rede (T-042, DEC-077).
+    """
 
 
 class RejeicaoApi(Exception):

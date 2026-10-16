@@ -22,11 +22,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.assinatura import assinar_pedido_evento, conferir_assinatura
 from src.cancelamento import CancelamentoIncerto, NotaJaCancelada, cancelar
 from src.certificado import carregar_certificado
-from src.client import ClienteNfse, ErroConexao
+from src.client import ClienteNfse
 from src.config import RAIZ, Config, carregar_config
 from src.dps import NS, validar_xml
 from src.emitente import PASTA, carregar_emitente
-from src.erros import RejeicaoApi, RespostaInesperada
+from src.erros import ErroConexao, RejeicaoApi, RespostaInesperada
 from src.evento import (
     CANCELAMENTO,
     PedidoCancelamento,
