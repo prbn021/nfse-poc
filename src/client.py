@@ -27,7 +27,7 @@ from src.certificado import Certificado
 from src.codec import codificar, decodificar
 from src.config import Config
 from src.dps import NS
-from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
+from src.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
 from src.nfse import NfseEmitida
 
 # Só hosts da produção restrita (docs/SPEC.md §6). Produção é recusada (INV-02, DEC-002).
@@ -42,10 +42,6 @@ _TIPO_EVENTO = re.compile(r"[0-9]{6}")  # código do evento, Anexo II (ex.: 1011
 _CODIGO_SERVICO = re.compile(r"\d{9}|\d{2}\.\d{2}\.\d{2}\.\d{3}")
 _PARAMETRIZACAO = "parametrizacao"  # caminho da API de parâmetros municipais no ADN
 _CAMINHO = re.compile(r"[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*")
-
-
-class ErroConexao(Exception):
-    """Falha de rede ou de TLS: a requisição não recebeu resposta HTTP."""
 
 
 @dataclass(frozen=True)

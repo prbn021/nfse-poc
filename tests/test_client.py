@@ -14,11 +14,11 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 
 from src.certificado import carregar_certificado
-from src.client import ClienteNfse, ErroConexao, contexto_tls
+from src.client import ClienteNfse, contexto_tls
 from src.codec import codificar, decodificar
 from src.config import XSD_DIR_PADRAO, Config
 from src.dps import gerar_id
-from src.erros import MensagemApi, RejeicaoApi, RespostaInesperada
+from src.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
 from tests.pfx import CNPJ, gerar_pfx
 
 SENHA = "s3nh4-f1ct1c14-xyz"

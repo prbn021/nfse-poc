@@ -14,22 +14,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
 
 from lxml import etree
 
-from src.client import ErroConexao
+from src.aplicacao.portas import SefinEmissao
 from src.dps import NS
-from src.erros import RejeicaoApi, RespostaInesperada
+from src.erros import ErroConexao, RejeicaoApi, RespostaInesperada
 from src.nfse import NfseEmitida, conferir_nfse
 
 _DS = "http://www.w3.org/2000/09/xmldsig#"
-
-
-class Cliente(Protocol):
-    def chave_da_dps(self, id_dps: str) -> str | None: ...
-    def emitir(self, dps_assinada: bytes) -> NfseEmitida: ...
-    def obter_nfse(self, chave: str) -> bytes: ...
 
 
 class DpsJaEmitida(Exception):
@@ -78,7 +71,7 @@ def _id_da_dps_assinada(xml: bytes) -> str:
     return id_dps
 
 
-def emitir(cliente: Cliente, dps_assinada: bytes, xsd_nfse: Path) -> Resultado:
+def emitir(cliente: SefinEmissao, dps_assinada: bytes, xsd_nfse: Path) -> Resultado:
     """Envia a DPS uma vez e confere a NFS-e devolvida."""
     id_dps = _id_da_dps_assinada(dps_assinada)
 

@@ -16,22 +16,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
 
 from lxml import etree
 
-from src.client import ErroConexao
+from src.aplicacao.portas import SefinEventos
 from src.dps import NS
-from src.erros import RespostaInesperada
+from src.erros import ErroConexao, RespostaInesperada
 from src.evento import CANCELAMENTO, conferir_evento
 
 _DS = "http://www.w3.org/2000/09/xmldsig#"
 _SEQ = 1  # o cancelamento é evento único: nSeqEvento 001 (Anexo II)
-
-
-class Cliente(Protocol):
-    def consultar_evento(self, chave: str, tipo: str, seq: int) -> bytes | None: ...
-    def registrar_evento(self, chave: str, pedido_assinado: bytes) -> bytes: ...
 
 
 class NotaJaCancelada(Exception):
@@ -88,7 +82,7 @@ def _dados_do_pedido(xml: bytes) -> tuple[str, str]:
     return id_pedido, chave
 
 
-def cancelar(cliente: Cliente, pedido_assinado: bytes, xsd_evento: Path) -> Resultado:
+def cancelar(cliente: SefinEventos, pedido_assinado: bytes, xsd_evento: Path) -> Resultado:
     """Envia o pedido de cancelamento uma vez e confere o evento devolvido."""
     id_pedido, chave = _dados_do_pedido(pedido_assinado)
 
