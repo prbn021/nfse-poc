@@ -16,7 +16,7 @@ from lxml import etree
 from src.assinatura import conferir_assinatura
 from src.codec import codificar, decodificar
 from src.config import RAIZ, XSD_DIR_PADRAO, Config
-from src.dps import NS
+from src.dominio.dps import NS
 from tests.evento_ficticio import gerar_evento
 from tests.nfse_ficticia import CHAVE
 from tests.pfx import CNPJ, chave_de_teste, gerar_certificado, gerar_pfx

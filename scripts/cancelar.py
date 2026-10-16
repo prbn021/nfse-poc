@@ -19,21 +19,26 @@ from lxml import etree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.assinatura import assinar_pedido_evento, conferir_assinatura
+from src.assinatura import (
+    assinar_pedido_evento,
+    conferir_assinatura,
+    conferir_assinatura_do_sistema,
+)
 from src.cancelamento import CancelamentoIncerto, NotaJaCancelada, cancelar
 from src.certificado import carregar_certificado
 from src.client import ClienteNfse
 from src.config import RAIZ, Config, carregar_config
-from src.dps import NS, validar_xml
-from src.emitente import PASTA, carregar_emitente
-from src.erros import ErroConexao, RejeicaoApi, RespostaInesperada
-from src.evento import (
+from src.dominio.chave import cnpj_do_emitente
+from src.dominio.dps import NS, validar_xml
+from src.dominio.erros import ErroConexao, RejeicaoApi, RespostaInesperada
+from src.dominio.evento import (
     CANCELAMENTO,
     PedidoCancelamento,
     localizar_xsd_evento,
     localizar_xsd_pedido_evento,
     para_xml_pedido,
 )
+from src.emitente import PASTA, carregar_emitente
 
 # Códigos de saída, os mesmos do emitir.py: 0 cancelada e conferida (ou, sem --confirmar,
 # pedido assinado e salvo); 1 erro antes do envio.
@@ -67,12 +72,6 @@ DICAS = {
 
 def _erro(texto: str) -> None:
     print(f"[X] {texto}", file=sys.stderr)
-
-
-def _cnpj_da_chave(chave: str) -> str:
-    # Anexo I, Id da NFS-e: município (7), ambiente gerador (1), tipo de inscrição (1),
-    # inscrição federal (14), número (13), ano e mês (4), código (9), DV (1).
-    return chave[9:23]
 
 
 def _salvar_resposta(saida: Path, id_pedido: str, erro: RejeicaoApi | RespostaInesperada) -> None:
@@ -149,7 +148,7 @@ def main(
             raise ValueError("chave de acesso fora do formato: 50 dígitos")
         config = config or carregar_config()
         emitente = carregar_emitente(args.emitente, pasta)
-        if _cnpj_da_chave(args.chave) != emitente.cnpj:
+        if cnpj_do_emitente(args.chave) != emitente.cnpj:
             raise ValueError(
                 "a chave não é de uma nota deste emitente (o CNPJ da chave é outro); nada foi feito"
             )
@@ -199,7 +198,12 @@ def main(
     print(f"SEFIN: {cliente.sefin_url}")
     with cliente:
         try:
-            resultado = cancelar(cliente, assinado, xsd_evento)
+            resultado = cancelar(
+                cliente,
+                assinado,
+                xsd_evento,
+                conferir_assinatura=conferir_assinatura_do_sistema,
+            )
         except NotaJaCancelada as erro:
             _erro(str(erro))
             print(f"Evento já registrado: {_salvar_evento(saida, args.chave, erro.evento)}")

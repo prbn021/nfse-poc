@@ -26,9 +26,9 @@ from lxml import etree
 from src.certificado import Certificado
 from src.codec import codificar, decodificar
 from src.config import Config
-from src.dps import NS
-from src.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
-from src.nfse import NfseEmitida
+from src.dominio.dps import NS
+from src.dominio.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
+from src.dominio.nfse import NfseEmitida
 
 # Só hosts da produção restrita (docs/SPEC.md §6). Produção é recusada (INV-02, DEC-002).
 SUFIXO_HOST = ".producaorestrita.nfse.gov.br"

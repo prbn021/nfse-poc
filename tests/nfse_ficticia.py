@@ -8,7 +8,7 @@ from lxml import etree
 from signxml import XMLSigner, namespaces
 
 from src.assinatura import ASSINATURA, C14N, DIGEST
-from src.dps import NS
+from src.dominio.dps import NS
 from tests.pfx import CNPJ, chave_de_teste, gerar_certificado
 
 CHAVE = "33045572" + "2" + CNPJ + "0" * 27  # 50 dígitos, fictícia

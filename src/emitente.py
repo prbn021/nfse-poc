@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.config import RAIZ
-from src.dps import email_valido, fone_valido
+from src.dominio.dps import email_valido, fone_valido
 
 PASTA = RAIZ / "emitentes"
 EXEMPLO = "exemplo"

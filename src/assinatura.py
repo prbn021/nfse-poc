@@ -34,7 +34,7 @@ from signxml import (
 from signxml.exceptions import SignXMLException
 
 from src.certificado import Certificado
-from src.dps import NS
+from src.dominio.dps import NS
 
 # Se a SEFIN recusar a assinatura (E0714), a canonicalização é o primeiro ponto a revisar.
 C14N = CanonicalizationMethod.EXCLUSIVE_XML_CANONICALIZATION_1_0_WITH_COMMENTS

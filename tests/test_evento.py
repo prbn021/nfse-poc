@@ -1,11 +1,20 @@
 """Conferência do evento devolvido pela consulta de eventos (T-028, DEC-051)."""
 
+from functools import partial
+
 import pytest
 
+from src.assinatura import conferir_assinatura_do_sistema
 from src.config import XSD_DIR_PADRAO
-from src.evento import conferir_evento, localizar_xsd_evento
+from src.dominio import evento as dominio_evento
+from src.dominio.evento import localizar_xsd_evento
 from tests.evento_ficticio import CANCELAMENTO, gerar_evento
 from tests.nfse_ficticia import CHAVE
+
+# A conferência com o adaptador de assinatura de verdade, como os scripts a montam (T-043).
+conferir_evento = partial(
+    dominio_evento.conferir_evento, conferir_assinatura=conferir_assinatura_do_sistema
+)
 
 
 @pytest.fixture(scope="module")
@@ -86,3 +95,53 @@ def test_evento_de_outro_pedido(xsd):
     outro = gerar_evento(id_pedido=f"PRE{'1' * 56}")
     problemas = conferir_evento(outro, chave=CHAVE, tipo=CANCELAMENTO, xsd=xsd, id_pedido=ID_PEDIDO)
     assert "o evento não é do pedido enviado (Id do pedido diferente)" in problemas
+
+
+# --- conferência da assinatura pela porta recebida (T-043) -------------------------------
+
+
+class ConferidorFalso:
+    """Guarda o XML recebido e, se pedido, recusa a assinatura como o adaptador recusaria."""
+
+    def __init__(self, *, recusar: bool):
+        self.recusar = recusar
+        self.recebidos = []
+
+    def __call__(self, xml: bytes) -> None:
+        self.recebidos.append(xml)
+        if self.recusar:
+            raise ValueError("assinatura não confere")
+
+
+def test_a_assinatura_e_conferida_pelo_conferidor_recebido(evento, xsd):
+    conferidor = ConferidorFalso(recusar=True)
+    problemas = dominio_evento.conferir_evento(
+        evento, chave=CHAVE, tipo=CANCELAMENTO, xsd=xsd, conferir_assinatura=conferidor
+    )
+    assert problemas == ["assinatura do evento não confere com o certificado que ele traz"]
+    assert conferidor.recebidos == [evento]
+
+
+def test_conferidor_que_aceita_nao_gera_problema(evento, xsd):
+    # O evento alterado só é apontado pela assinatura; quem confere é o conferidor recebido.
+    alterado = evento.replace(b"<cMotivo>1</cMotivo>", b"<cMotivo>2</cMotivo>", 1)
+    conferidor = ConferidorFalso(recusar=False)
+    problemas = dominio_evento.conferir_evento(
+        alterado, chave=CHAVE, tipo=CANCELAMENTO, xsd=xsd, conferir_assinatura=conferidor
+    )
+    assert problemas == []
+    assert conferidor.recebidos == [alterado]
+
+
+def test_a_substituicao_passa_o_conferidor_adiante(xsd):
+    evento = gerar_evento(tipo="105102", ch_substituta="1" * 50)
+    conferidor = ConferidorFalso(recusar=True)
+    problemas = dominio_evento.conferir_substituicao(
+        evento,
+        chave_substituida=CHAVE,
+        chave_substituta="1" * 50,
+        xsd=xsd,
+        conferir_assinatura=conferidor,
+    )
+    assert problemas == ["assinatura do evento não confere com o certificado que ele traz"]
+    assert conferidor.recebidos == [evento]

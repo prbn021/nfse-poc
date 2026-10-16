@@ -2,6 +2,7 @@
 
 A conferência não aceita nem recusa a nota: a NFS-e já foi gerada quando chega aqui. Ela só
 aponta o que não bate (XSD, Ids, ambiente, assinatura), para quem rodou o envio decidir.
+A assinatura é conferida por quem chamou (`ConferidorAssinatura`, T-043).
 """
 
 from __future__ import annotations
@@ -13,9 +14,9 @@ from pathlib import Path
 
 from lxml import etree
 
-from src.assinatura import conferir_assinatura_do_sistema
-from src.dps import NS, validar_xml
-from src.erros import MensagemApi
+from src.dominio.conferencia import ConferidorAssinatura
+from src.dominio.erros import MensagemApi
+from src.dominio.xsd import NS, validar_xml
 
 _N = {"n": NS}
 _HOMOLOGACAO = "2"  # tpAmb da produção restrita (INV-02)
@@ -82,10 +83,18 @@ def _ler(xml: bytes) -> etree._Element | None:
     return raiz if raiz.tag == f"{{{NS}}}NFSe" else None
 
 
-def conferir_nfse(xml: bytes, *, chave: str, id_dps: str | None, xsd: Path) -> list[str]:
+def conferir_nfse(
+    xml: bytes,
+    *,
+    chave: str,
+    id_dps: str | None,
+    xsd: Path,
+    conferir_assinatura: ConferidorAssinatura,
+) -> list[str]:
     """Lista o que não bate na NFS-e devolvida; vazia quando está tudo certo.
 
     Com `id_dps` None (consulta por chave, T-028), o Id da DPS embutida não é comparado.
+    `conferir_assinatura` confere a assinatura do sistema (T-043).
     """
     raiz = _ler(xml)
     if raiz is None:
@@ -110,7 +119,7 @@ def conferir_nfse(xml: bytes, *, chave: str, id_dps: str | None, xsd: Path) -> l
         problemas.append("tpAmb da NFS-e não é 2 (produção restrita)")
 
     try:
-        conferir_assinatura_do_sistema(xml)
+        conferir_assinatura(xml)
     except ValueError:
         problemas.append("assinatura da NFS-e não confere com o certificado que ela traz")
     return problemas

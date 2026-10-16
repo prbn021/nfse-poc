@@ -10,7 +10,7 @@ from signxml import SignatureConfiguration, XMLVerifier
 
 from src.codec import decodificar
 from src.config import RAIZ, XSD_DIR_PADRAO
-from src.dps import localizar_xsd_dps, validar_xml
+from src.dominio.dps import localizar_xsd_dps, validar_xml
 from tests.pfx import CNPJ, gerar_certificado, gerar_pfx
 
 sys.path.insert(0, str(RAIZ / "scripts"))

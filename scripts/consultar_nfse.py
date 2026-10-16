@@ -17,14 +17,16 @@ from lxml import etree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.assinatura import conferir_assinatura_do_sistema
 from src.certificado import carregar_certificado
 from src.client import ClienteNfse
 from src.config import RAIZ, Config, carregar_config
-from src.dps import NS
+from src.dominio.chave import cnpj_do_emitente
+from src.dominio.dps import NS
+from src.dominio.erros import ErroConexao, RejeicaoApi, RespostaInesperada
+from src.dominio.evento import conferir_evento, localizar_xsd_evento
+from src.dominio.nfse import conferir_nfse, localizar_xsd_nfse
 from src.emitente import PASTA, carregar_emitente
-from src.erros import ErroConexao, RejeicaoApi, RespostaInesperada
-from src.evento import conferir_evento, localizar_xsd_evento
-from src.nfse import conferir_nfse, localizar_xsd_nfse
 
 # Códigos de saída, os mesmos do emitir.py: 0 consultada e conferida; 1 erro antes da consulta.
 ERRO_DE_REDE = 3
@@ -38,12 +40,6 @@ _N = {"n": NS}
 
 def _erro(texto: str) -> None:
     print(f"[X] {texto}", file=sys.stderr)
-
-
-def _cnpj_da_chave(chave: str) -> str:
-    # Anexo I, Id da NFS-e: município (7), ambiente gerador (1), tipo de inscrição (1),
-    # inscrição federal (14), número (13), ano e mês (4), código (9), DV (1).
-    return chave[9:23]
 
 
 def _salvar_resposta(saida: Path, chave: str, erro: RejeicaoApi | RespostaInesperada) -> None:
@@ -98,7 +94,7 @@ def main(
             raise ValueError("chave de acesso fora do formato: 50 dígitos")
         config = config or carregar_config()
         emitente = carregar_emitente(args.emitente, pasta)
-        if _cnpj_da_chave(args.chave) != emitente.cnpj:
+        if cnpj_do_emitente(args.chave) != emitente.cnpj:
             raise ValueError(
                 "a chave não é de uma nota deste emitente (o CNPJ da chave é outro); "
                 "nada foi consultado"
@@ -145,7 +141,13 @@ def main(
     print(f"Chave de acesso: {args.chave}")
     print(f"Número: {numero}  cStat: {situacao}")
     print(f"NFS-e: {arquivo}")
-    problemas_nfse = conferir_nfse(nfse, chave=args.chave, id_dps=None, xsd=xsd_nfse)
+    problemas_nfse = conferir_nfse(
+        nfse,
+        chave=args.chave,
+        id_dps=None,
+        xsd=xsd_nfse,
+        conferir_assinatura=conferir_assinatura_do_sistema,
+    )
     for problema in problemas_nfse:
         _erro(f"conferência da NFS-e: {problema}")
     if not problemas_nfse:
@@ -161,7 +163,11 @@ def main(
             arquivo.write_bytes(evento)
             print(f"Evento: {arquivo}")
             problemas_evento = conferir_evento(
-                evento, chave=args.chave, tipo=args.evento, xsd=xsd_evento
+                evento,
+                chave=args.chave,
+                tipo=args.evento,
+                xsd=xsd_evento,
+                conferir_assinatura=conferir_assinatura_do_sistema,
             )
             for problema in problemas_evento:
                 _erro(f"conferência do evento: {problema}")

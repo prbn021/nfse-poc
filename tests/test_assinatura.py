@@ -17,7 +17,7 @@ import src.assinatura as assinatura
 from src.assinatura import assinar_dps, conferir_assinatura
 from src.certificado import Certificado
 from src.config import XSD_DIR_PADRAO
-from src.dps import NS, localizar_xsd_dps, validar_xml
+from src.dominio.dps import NS, localizar_xsd_dps, validar_xml
 from tests.pfx import CNPJ, chave_de_teste, gerar_certificado
 
 DS = "http://www.w3.org/2000/09/xmldsig#"

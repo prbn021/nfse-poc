@@ -18,7 +18,7 @@ from src.assinatura import assinar_dps, conferir_assinatura
 from src.certificado import carregar_certificado
 from src.codec import codificar, decodificar
 from src.config import carregar_config
-from src.dps import localizar_xsd_dps, para_xml, validar_xml
+from src.dominio.dps import localizar_xsd_dps, para_xml, validar_xml
 from src.emitente import PASTA, carregar_emitente
 
 

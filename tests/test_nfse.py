@@ -1,15 +1,22 @@
 """Conferência da NFS-e devolvida pela SEFIN (T-007). Só dados fictícios."""
 
+from functools import partial
 from pathlib import Path
 
 import pytest
 
-from src.assinatura import assinar_dps
+from src.assinatura import assinar_dps, conferir_assinatura_do_sistema
 from src.certificado import Certificado
 from src.config import XSD_DIR_PADRAO
-from src.nfse import conferir_nfse, localizar_xsd_nfse
+from src.dominio import nfse as dominio_nfse
+from src.dominio.nfse import localizar_xsd_nfse
 from tests.nfse_ficticia import CHAVE, gerar_nfse
 from tests.pfx import chave_de_teste, gerar_certificado
+
+# A conferência com o adaptador de assinatura de verdade, como os scripts a montam (T-043).
+conferir_nfse = partial(
+    dominio_nfse.conferir_nfse, conferir_assinatura=conferir_assinatura_do_sistema
+)
 
 DPS = (Path(__file__).parent / "dados" / "dps-sem-opcionais.xml").read_bytes()
 ID_DPS = "DPS330455721122233300018100001000000000000042"
@@ -89,3 +96,39 @@ def test_consulta_por_chave_ainda_aponta_producao(dps_assinada, xsd):
 def test_conteudo_que_nao_e_nfse(xml, xsd):
     problemas = conferir_nfse(xml, chave=CHAVE, id_dps=ID_DPS, xsd=xsd)
     assert problemas == ["o retorno não é uma NFS-e em XML"]
+
+
+# --- conferência da assinatura pela porta recebida (T-043) -------------------------------
+
+
+class ConferidorFalso:
+    """Guarda o XML recebido e, se pedido, recusa a assinatura como o adaptador recusaria."""
+
+    def __init__(self, *, recusar: bool):
+        self.recusar = recusar
+        self.recebidos = []
+
+    def __call__(self, xml: bytes) -> None:
+        self.recebidos.append(xml)
+        if self.recusar:
+            raise ValueError("assinatura não confere")
+
+
+def test_a_assinatura_e_conferida_pelo_conferidor_recebido(nfse, xsd):
+    conferidor = ConferidorFalso(recusar=True)
+    problemas = dominio_nfse.conferir_nfse(
+        nfse, chave=CHAVE, id_dps=ID_DPS, xsd=xsd, conferir_assinatura=conferidor
+    )
+    assert problemas == ["assinatura da NFS-e não confere com o certificado que ela traz"]
+    assert conferidor.recebidos == [nfse]
+
+
+def test_conferidor_que_aceita_nao_gera_problema(nfse, xsd):
+    # A nota alterada só é apontada pela assinatura; quem confere é o conferidor recebido.
+    alterada = nfse.replace(b"<vLiq>100.00</vLiq>", b"<vLiq>999.00</vLiq>", 1)
+    conferidor = ConferidorFalso(recusar=False)
+    problemas = dominio_nfse.conferir_nfse(
+        alterada, chave=CHAVE, id_dps=ID_DPS, xsd=xsd, conferir_assinatura=conferidor
+    )
+    assert problemas == []
+    assert conferidor.recebidos == [alterada]

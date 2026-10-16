@@ -1,6 +1,7 @@
 """Boundaries de docs/SPEC.md §3, conferidas pelos imports de src/ e scripts/.
 
 B-1 a B-3: T-016, DEC-017; scripts/ entrou na T-015 (DEC-031). B-5: T-042 (DEC-076, DEC-077).
+B-4, que amplia a B-1: T-043 (DEC-078).
 """
 
 import pytest
@@ -10,12 +11,14 @@ from tests.boundaries import dependencias, ler_fontes, violacoes
 
 # Módulos de exemplo: nenhum deles existe em src/ com este conteúdo.
 LIMPO = "import re\nfrom lxml import etree\n"
+MODELO = "src/dominio/dps/modelo.py"
 
 
 def test_o_codigo_atual_respeita_as_boundaries():
     fontes = ler_fontes(RAIZ)
     # Sem isto o teste passaria sem ter lido nada.
-    assert "src/dps.py" in fontes
+    assert MODELO in fontes
+    assert "src/dominio/__init__.py" in fontes
     assert "src/__init__.py" in fontes
     assert "scripts/gerar_dps.py" in fontes
     assert "src/aplicacao/portas.py" in fontes
@@ -23,12 +26,23 @@ def test_o_codigo_atual_respeita_as_boundaries():
     assert violacoes(fontes) == []
 
 
-# --- B-1: src/dps.py não depende de rede nem de certificado ---------------------------
+# --- B-4 (amplia a B-1): src/dominio/ só importa biblioteca padrão, lxml e a si mesmo ---
 
 
-def test_b1_dps_importa_biblioteca_de_rede():
-    fontes = {"src/dps.py": "import httpx\n"}
-    assert violacoes(fontes) == ["B-1: src.dps -> httpx", "B-2: src.dps -> httpx"]
+def test_o_dominio_saiu_da_raiz_de_src():
+    # Critério (1) da T-043: nenhum módulo de domínio solto em src/.
+    fontes = ler_fontes(RAIZ)
+    for antigo in ("dps", "nfse", "evento", "erros", "lista_servicos"):
+        assert f"src/{antigo}.py" not in fontes, antigo
+    for novo in ("dps/__init__", "nfse", "evento", "erros", "lista_servicos", "xsd", "chave"):
+        assert f"src/dominio/{novo}.py" in fontes, novo
+
+
+def test_b4_dominio_importa_biblioteca_de_rede():
+    assert violacoes({MODELO: "import httpx\n"}) == [
+        "B-2: src.dominio.dps.modelo -> httpx",
+        "B-4: src.dominio.dps.modelo -> httpx",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -38,42 +52,79 @@ def test_b1_dps_importa_biblioteca_de_rede():
         ("import signxml\n", "signxml"),
         ("from src.certificado import carregar\n", "src.certificado"),
         ("from src import certificado\n", "src.certificado"),
-        ("from . import certificado\n", "src.certificado"),
-        ("from .certificado import carregar\n", "src.certificado"),
-        ("from src.assinatura import assinar_dps\n", "src.assinatura"),
-        ("from . import assinatura\n", "src.assinatura"),
+        ("from ... import certificado\n", "src.certificado"),
+        ("from ...certificado import carregar\n", "src.certificado"),
+        ("from src.assinatura import conferir_assinatura_do_sistema\n", "src.assinatura"),
+        ("from ... import assinatura\n", "src.assinatura"),
     ],
 )
-def test_b1_dps_importa_modulo_de_certificado(codigo, alvo):
-    fontes = {"src/dps.py": codigo, "src/certificado.py": "import cryptography\n"}
-    assert violacoes(fontes) == [f"B-1: src.dps -> {alvo}"]
+def test_b4_dominio_importa_modulo_de_certificado(codigo, alvo):
+    fontes = {MODELO: codigo, "src/certificado.py": "import cryptography\n"}
+    assert violacoes(fontes) == [f"B-4: src.dominio.dps.modelo -> {alvo}"]
 
 
-def test_b1_dps_importa_o_cliente_de_rede():
-    fontes = {"src/dps.py": "from src.client import enviar\n", "src/client.py": "import httpx\n"}
-    assert violacoes(fontes) == ["B-1: src.dps -> src.client"]
+@pytest.mark.parametrize(
+    ("codigo", "alvo"),
+    [
+        ("from src.client import enviar\n", "src.client"),
+        ("from src.config import carregar_config\n", "src.config"),
+        ("from src.emitente import Emitente\n", "src.emitente"),
+        ("from src.aplicacao.portas import SefinEmissao\n", "src.aplicacao"),
+        ("from dotenv import load_dotenv\n", "dotenv"),
+        ("import httpx_parecido\n", "httpx_parecido"),
+        ("def f():\n    import src.segredos\n", "src.segredos"),
+    ],
+)
+def test_b4_dominio_importa_o_que_nao_e_dominio(codigo, alvo):
+    assert violacoes({"src/dominio/nfse.py": codigo}) == [f"B-4: src.dominio.nfse -> {alvo}"]
 
 
-def test_b1_dps_chega_a_rede_por_outro_modulo():
-    fontes = {
-        "src/dps.py": "from src.util import baixar\n",
-        "src/util.py": "from src.outro import abrir\n",
-        "src/outro.py": "def abrir():\n    import socket\n",
-    }
-    assert violacoes(fontes) == [
-        "B-1: src.dps -> src.util -> src.outro -> socket",
-        "B-2: src.outro -> socket",
+def test_b4_dominio_importa_de_scripts():
+    assert violacoes({"src/dominio/evento.py": "from scripts import gerar_dps\n"}) == [
+        "B-3: src.dominio.evento -> scripts",
+        "B-4: src.dominio.evento -> scripts",
     ]
 
 
-def test_b1_dps_chega_a_certificado_pelo_init_do_pacote():
-    # Importar src.dps executa src/__init__.py antes.
-    fontes = {"src/__init__.py": "import cryptography\n", "src/dps.py": LIMPO}
-    assert violacoes(fontes) == ["B-1: src.dps -> src -> cryptography"]
+def test_b4_dominio_chega_a_certificado_pelo_init_de_src():
+    # Importar src.dominio.dps.modelo executa src/__init__.py antes.
+    fontes = {"src/__init__.py": "import cryptography\n", MODELO: LIMPO}
+    assert violacoes(fontes) == ["B-4: src.dominio.dps.modelo -> src -> cryptography"]
 
 
-def test_b1_so_vale_para_dps():
-    fontes = {"src/assinatura.py": "import signxml\nfrom src.certificado import carregar\n"}
+def test_b4_init_do_pacote_do_dominio_tambem_conta():
+    assert violacoes({"src/dominio/__init__.py": "import signxml\n"}) == [
+        "B-4: src.dominio -> signxml"
+    ]
+
+
+def test_b4_cada_modulo_do_dominio_responde_pelo_proprio_import():
+    # O módulo que importa outro do domínio não é apontado: quem cruza a boundary é o outro.
+    fontes = {MODELO: "from src.dominio.xsd import NS\n", "src/dominio/xsd.py": "import signxml\n"}
+    assert violacoes(fontes) == ["B-4: src.dominio.xsd -> signxml"]
+
+
+@pytest.mark.parametrize(
+    "codigo",
+    [
+        LIMPO,
+        "from __future__ import annotations\nfrom dataclasses import dataclass\nimport zipfile\n",
+        "from lxml.etree import XMLSchema\nimport lxml\n",
+        "from typing import Protocol\n",
+        "from src.dominio.xsd import NS\nfrom src.dominio import chave\n",
+        "from . import regras\nfrom .regras import texto_tsstring\nfrom ..xsd import validar_xml\n",
+    ],
+)
+def test_b4_dominio_pode_usar_biblioteca_padrao_lxml_e_a_si_mesmo(codigo):
+    assert violacoes({MODELO: codigo}) == []
+
+
+def test_b4_so_vale_dentro_de_src_dominio():
+    fontes = {
+        "src/assinatura.py": "import signxml\nfrom src.certificado import carregar\n",
+        "src/dominio_velho.py": "import signxml\n",
+        "scripts/dominio.py": "from src.config import carregar_config\n",
+    }
     assert violacoes(fontes) == []
 
 
@@ -186,6 +237,10 @@ def test_b3_nome_parecido_com_scripts_passa():
         ("from src.assinatura import conferir_assinatura\n", "src.assinatura"),
         ("from src.config import carregar_config\n", "src.config"),
         ("def f():\n    import src.certificado\n", "src.certificado"),
+        # Os caminhos de antes da T-043, que esvaziou a lista provisória da B-5.
+        ("from src.nfse import NfseEmitida\n", "src.nfse"),
+        ("from src.erros import ErroConexao\n", "src.erros"),
+        ("from src.dps import NS\n", "src.dps"),
     ],
 )
 def test_b5_aplicacao_importa_o_que_nao_e_dominio(codigo, alvo):
@@ -221,10 +276,7 @@ def test_b5_init_do_pacote_da_aplicacao_tambem_conta():
         "from dataclasses import dataclass\nfrom pathlib import Path\nimport xml.etree\n",
         "from src.dominio.dps import Dps\nfrom src.dominio import evento\n",
         "from src.aplicacao.portas import SefinEmissao\nfrom . import portas\n",
-        # Módulos de domínio que ainda não foram para src/dominio/ (T-043).
-        "from src.nfse import NfseEmitida\nfrom src.erros import ErroConexao\n",
-        "from src.dps import NS\nfrom src.evento import CANCELAMENTO\n",
-        "from src.lista_servicos import servicos_nacionais\n",
+        "from src.dominio.nfse import NfseEmitida\nfrom src.dominio.erros import ErroConexao\n",
     ],
 )
 def test_b5_aplicacao_pode_usar_biblioteca_padrao_dominio_e_a_si_mesma(codigo):
@@ -241,7 +293,7 @@ def test_b5_so_vale_dentro_de_src_aplicacao():
 
 
 def test_emissao_e_cancelamento_nao_dependem_do_cliente_de_rede():
-    # Critério (3) da T-042: os dois usam as portas e o ErroConexao de src/erros.py.
+    # Critério (3) da T-042: os dois usam as portas e o ErroConexao de src/dominio/erros.py.
     deps = dependencias(ler_fontes(RAIZ))
     for modulo in ("src.emissao", "src.cancelamento"):
         assert "src.client" not in deps[modulo], modulo
@@ -252,12 +304,13 @@ def test_emissao_e_cancelamento_nao_dependem_do_cliente_de_rede():
 
 def test_violacoes_saem_ordenadas_e_sem_repeticao():
     fontes = {
-        "src/dps.py": "import httpx\nfrom httpx import Client\nimport scripts\n",
+        MODELO: "import httpx\nfrom httpx import Client\nimport scripts\n",
         "src/xsd.py": "import socket\n",
     }
     assert violacoes(fontes) == [
-        "B-1: src.dps -> httpx",
-        "B-2: src.dps -> httpx",
+        "B-2: src.dominio.dps.modelo -> httpx",
         "B-2: src.xsd -> socket",
-        "B-3: src.dps -> scripts",
+        "B-3: src.dominio.dps.modelo -> scripts",
+        "B-4: src.dominio.dps.modelo -> httpx",
+        "B-4: src.dominio.dps.modelo -> scripts",
     ]

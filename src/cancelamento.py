@@ -19,10 +19,10 @@ from pathlib import Path
 
 from lxml import etree
 
-from src.aplicacao.portas import SefinEventos
-from src.dps import NS
-from src.erros import ErroConexao, RespostaInesperada
-from src.evento import CANCELAMENTO, conferir_evento
+from src.aplicacao.portas import ConferidorAssinatura, SefinEventos
+from src.dominio.dps import NS
+from src.dominio.erros import ErroConexao, RespostaInesperada
+from src.dominio.evento import CANCELAMENTO, conferir_evento
 
 _DS = "http://www.w3.org/2000/09/xmldsig#"
 _SEQ = 1  # o cancelamento é evento único: nSeqEvento 001 (Anexo II)
@@ -82,8 +82,15 @@ def _dados_do_pedido(xml: bytes) -> tuple[str, str]:
     return id_pedido, chave
 
 
-def cancelar(cliente: SefinEventos, pedido_assinado: bytes, xsd_evento: Path) -> Resultado:
-    """Envia o pedido de cancelamento uma vez e confere o evento devolvido."""
+def cancelar(
+    cliente: SefinEventos,
+    pedido_assinado: bytes,
+    xsd_evento: Path,
+    *,
+    conferir_assinatura: ConferidorAssinatura,
+) -> Resultado:
+    """Envia o pedido de cancelamento uma vez e confere o evento devolvido, com a
+    assinatura do sistema conferida por `conferir_assinatura` (T-043)."""
     id_pedido, chave = _dados_do_pedido(pedido_assinado)
 
     existente = cliente.consultar_evento(chave, CANCELAMENTO, _SEQ)
@@ -117,6 +124,11 @@ def cancelar(cliente: SefinEventos, pedido_assinado: bytes, xsd_evento: Path) ->
         recuperado = True
 
     problemas = conferir_evento(
-        evento, chave=chave, tipo=CANCELAMENTO, xsd=xsd_evento, id_pedido=id_pedido
+        evento,
+        chave=chave,
+        tipo=CANCELAMENTO,
+        xsd=xsd_evento,
+        conferir_assinatura=conferir_assinatura,
+        id_pedido=id_pedido,
     )
     return Resultado(evento=evento, problemas=problemas, recuperado=recuperado, falha=falha)

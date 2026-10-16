@@ -5,7 +5,7 @@ import re
 import pytest
 
 from src.config import RAIZ
-from src.lista_servicos import localizar_anexo_b, servicos_nacionais
+from src.dominio.lista_servicos import localizar_anexo_b, servicos_nacionais
 
 GOV_DOCS = RAIZ / "docs" / "referencia" / "gov-docs"
 

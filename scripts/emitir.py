@@ -26,11 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from gerar_dps import P_TOT_TRIB_SN_FICTICIO, _decimal, dps_exemplo, nbs
 
-from src.assinatura import assinar_dps, conferir_assinatura
+from src.assinatura import assinar_dps, conferir_assinatura, conferir_assinatura_do_sistema
 from src.certificado import carregar_certificado
 from src.client import ClienteNfse
 from src.config import RAIZ, Config, carregar_config
-from src.dps import (
+from src.dominio.dps import (
     MOTIVOS_SUBSTITUICAO,
     Dps,
     Substituicao,
@@ -38,11 +38,16 @@ from src.dps import (
     para_xml,
     validar_xml,
 )
+from src.dominio.erros import ErroConexao, RejeicaoApi, RespostaInesperada
+from src.dominio.evento import (
+    CANCELAMENTO,
+    SUBSTITUICAO,
+    conferir_substituicao,
+    localizar_xsd_evento,
+)
+from src.dominio.nfse import conferir_nfse, localizar_xsd_nfse, resumo_da_dps
 from src.emissao import DpsJaEmitida, EnvioIncerto, emitir
 from src.emitente import PASTA, carregar_emitente
-from src.erros import ErroConexao, RejeicaoApi, RespostaInesperada
-from src.evento import CANCELAMENTO, SUBSTITUICAO, conferir_substituicao, localizar_xsd_evento
-from src.nfse import conferir_nfse, localizar_xsd_nfse, resumo_da_dps
 
 # Códigos de saída, além de 0 (emitida e conferida) e 1 (erro antes do envio).
 ERRO_DE_REDE = 3  # nada foi gerado; a DPS pode ser enviada de novo
@@ -93,7 +98,13 @@ def _preparar_substituicao(cliente: ClienteNfse, dps: Dps, xsd_nfse: Path) -> Dp
     except RespostaInesperada as erro:
         raise _Recusa(RESPOSTA_INESPERADA, f"consulta da nota substituída: {erro}") from None
 
-    problemas = conferir_nfse(original, chave=chave, id_dps=None, xsd=xsd_nfse)
+    problemas = conferir_nfse(
+        original,
+        chave=chave,
+        id_dps=None,
+        xsd=xsd_nfse,
+        conferir_assinatura=conferir_assinatura_do_sistema,
+    )
     if problemas:
         raise _Recusa(1, f"a nota substituída não confere: {'; '.join(problemas)}")
     if eventos:
@@ -267,7 +278,12 @@ def main(
         print(f"DPS assinada e válida, série {dps.serie}, número {dps.n_dps}: {enviada}")
 
         try:
-            resultado = emitir(cliente, assinada, xsd_nfse)
+            resultado = emitir(
+                cliente,
+                assinada,
+                xsd_nfse,
+                conferir_assinatura=conferir_assinatura_do_sistema,
+            )
         except DpsJaEmitida as erro:
             _erro(str(erro))
             return JA_EMITIDA
@@ -328,7 +344,11 @@ def main(
             arquivo.write_bytes(evento)
             print(f"Evento 105102 da nota substituída: {arquivo}")
             problemas = conferir_substituicao(
-                evento, chave_substituida=chave, chave_substituta=nfse.chave, xsd=xsd_evento
+                evento,
+                chave_substituida=chave,
+                chave_substituta=nfse.chave,
+                xsd=xsd_evento,
+                conferir_assinatura=conferir_assinatura_do_sistema,
             )
             for problema in problemas:
                 _erro(f"conferência do evento 105102: {problema}")

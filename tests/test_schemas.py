@@ -6,7 +6,7 @@ import pytest
 from lxml import etree
 
 from src.config import RAIZ, XSD_DIR_PADRAO
-from src.dps import NS, localizar_xsd_dps, para_xml, validar_xml
+from src.dominio.dps import NS, localizar_xsd_dps, para_xml, validar_xml
 from tests.test_dps import _dps
 
 SCHEMAS = RAIZ / "schemas"
