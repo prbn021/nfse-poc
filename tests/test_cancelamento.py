@@ -5,19 +5,24 @@ O cliente aqui é um dublê que registra as chamadas; o HTTP de verdade é testa
 tests/test_client.py.
 """
 
+from functools import partial
 from pathlib import Path
 
 import pytest
 
-from src.assinatura import assinar_pedido_evento
-from src.cancelamento import CancelamentoIncerto, NotaJaCancelada, cancelar
+from src import cancelamento
+from src.assinatura import assinar_pedido_evento, conferir_assinatura_do_sistema
+from src.cancelamento import CancelamentoIncerto, NotaJaCancelada
 from src.certificado import Certificado
 from src.config import XSD_DIR_PADRAO
-from src.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
-from src.evento import localizar_xsd_evento
+from src.dominio.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
+from src.dominio.evento import localizar_xsd_evento
 from tests.evento_ficticio import gerar_evento
 from tests.nfse_ficticia import CHAVE
 from tests.pfx import chave_de_teste, gerar_certificado
+
+# Com o adaptador de assinatura de verdade, como os scripts o montam (T-043).
+cancelar = partial(cancelamento.cancelar, conferir_assinatura=conferir_assinatura_do_sistema)
 
 PEDIDO = (Path(__file__).parent / "dados" / "pedido-cancelamento.xml").read_bytes()
 ID_PEDIDO = f"PRE{CHAVE}101101"

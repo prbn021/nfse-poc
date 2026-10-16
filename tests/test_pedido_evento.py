@@ -19,8 +19,8 @@ import src.assinatura as assinatura
 from src.assinatura import assinar_dps, assinar_pedido_evento, conferir_assinatura
 from src.certificado import Certificado
 from src.config import XSD_DIR_PADRAO
-from src.dps import NS, validar_xml
-from src.evento import (
+from src.dominio.dps import NS, validar_xml
+from src.dominio.evento import (
     CANCELAMENTO,
     PedidoCancelamento,
     localizar_xsd_pedido_evento,

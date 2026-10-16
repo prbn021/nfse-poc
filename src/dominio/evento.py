@@ -5,7 +5,8 @@ e sem assinatura (T-029, DEC-052); quem assina é `src/assinatura.py`.
 
 Como em src/nfse.py, a conferência não aceita nem recusa o evento devolvido pela SEFIN: ele
 já foi registrado quando chega aqui. Ela só aponta o que não bate, para quem rodou a
-consulta decidir (T-028).
+consulta decidir (T-028). A assinatura é conferida por quem chamou
+(`ConferidorAssinatura`, T-043).
 """
 
 from __future__ import annotations
@@ -17,8 +18,10 @@ from pathlib import Path
 
 from lxml import etree
 
-from src.assinatura import conferir_assinatura_do_sistema
-from src.dps import NS, VERSAO, texto_tsstring, validar_xml
+from src.dominio.chave import TIPO_INSCRICAO_CNPJ, cnpj_do_emitente, tipo_inscricao
+from src.dominio.conferencia import ConferidorAssinatura
+from src.dominio.dps.regras import texto_tsstring
+from src.dominio.xsd import NS, VERSAO, validar_xml
 
 _N = {"n": NS}
 _HOMOLOGACAO = "2"  # tpAmb da produção restrita (INV-02)
@@ -30,9 +33,6 @@ SUBSTITUICAO = "105102"
 _DESCRICAO_CANCELAMENTO = "Cancelamento de NFS-e"
 # cMotivo (TSCodJustCanc): 1 Erro na Emissão, 2 Serviço não Prestado, 9 Outros.
 _MOTIVOS_CANCELAMENTO = (1, 2, 9)
-# Na chave de acesso, a posição 9 é o tipo de inscrição federal (2 = CNPJ) e as posições 10
-# a 23 são a inscrição do emitente (Anexo I, docs/SOURCES.md).
-_TIPO_INSCRICAO_CNPJ = "2"
 
 
 def _digitos(valor, tamanho: int, campo: str) -> str:
@@ -55,13 +55,13 @@ class PedidoCancelamento:
 
     def __post_init__(self):
         _digitos(self.chave, 50, "chave")
-        if self.chave[8] != _TIPO_INSCRICAO_CNPJ:
+        if tipo_inscricao(self.chave) != TIPO_INSCRICAO_CNPJ:
             raise ValueError(
                 "a chave não é de NFS-e de emitente com CNPJ (tipo de inscrição na posição 9 "
                 "diferente de 2); o modelo só aceita emitente com CNPJ (DEC-024)"
             )
         _digitos(self.cnpj_autor, 14, "cnpj_autor")
-        if self.cnpj_autor != self.chave[9:23]:
+        if self.cnpj_autor != cnpj_do_emitente(self.chave):
             raise ValueError(
                 "cnpj_autor não é o CNPJ do emitente da nota (posições 10 a 23 da chave): no "
                 "cancelamento, o autor do pedido é o emitente (E0813)"
@@ -134,13 +134,20 @@ def _ler(xml: bytes) -> etree._Element | None:
 
 
 def conferir_evento(
-    xml: bytes, *, chave: str, tipo: str, xsd: Path, id_pedido: str | None = None
+    xml: bytes,
+    *,
+    chave: str,
+    tipo: str,
+    xsd: Path,
+    conferir_assinatura: ConferidorAssinatura,
+    id_pedido: str | None = None,
 ) -> list[str]:
     """Lista o que não bate no evento consultado; vazia quando está tudo certo.
 
     `tipo` é o código do evento pedido, 6 dígitos (ex.: "101101", cancelamento): o grupo
     específico do pedido de registro se chama `e<tipo>`. Com `id_pedido`, confere também se o
-    pedido dentro do evento é o que foi enviado (T-030).
+    pedido dentro do evento é o que foi enviado (T-030). `conferir_assinatura` confere a
+    assinatura do sistema (T-043).
     """
     raiz = _ler(xml)
     if raiz is None:
@@ -163,18 +170,29 @@ def conferir_evento(
         problemas.append("o evento não é do pedido enviado (Id do pedido diferente)")
 
     try:
-        conferir_assinatura_do_sistema(xml)
+        conferir_assinatura(xml)
     except ValueError:
         problemas.append("assinatura do evento não confere com o certificado que ele traz")
     return problemas
 
 
 def conferir_substituicao(
-    xml: bytes, *, chave_substituida: str, chave_substituta: str, xsd: Path
+    xml: bytes,
+    *,
+    chave_substituida: str,
+    chave_substituta: str,
+    xsd: Path,
+    conferir_assinatura: ConferidorAssinatura,
 ) -> list[str]:
     """Confere o evento 105102 da nota substituída, como `conferir_evento`, e se ele aponta a
     nota nova em `chSubstituta` (T-031)."""
-    problemas = conferir_evento(xml, chave=chave_substituida, tipo=SUBSTITUICAO, xsd=xsd)
+    problemas = conferir_evento(
+        xml,
+        chave=chave_substituida,
+        tipo=SUBSTITUICAO,
+        xsd=xsd,
+        conferir_assinatura=conferir_assinatura,
+    )
     raiz = _ler(xml)
     grupo = None
     if raiz is not None:

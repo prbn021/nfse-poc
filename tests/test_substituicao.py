@@ -5,21 +5,28 @@ evento 105102 (T-031). Sem rede; só dados fictícios.
 import dataclasses
 from datetime import date
 from decimal import Decimal
+from functools import partial
 from pathlib import Path
 
 import pytest
 from lxml import etree
 
-from src.assinatura import assinar_dps
+from src.assinatura import assinar_dps, conferir_assinatura_do_sistema
 from src.certificado import Certificado
 from src.config import XSD_DIR_PADRAO
-from src.dps import NS, Substituicao, para_xml, validar_xml
-from src.evento import conferir_substituicao, localizar_xsd_evento
-from src.nfse import ResumoDps, resumo_da_dps
+from src.dominio import evento as dominio_evento
+from src.dominio.dps import NS, Substituicao, para_xml, validar_xml
+from src.dominio.evento import localizar_xsd_evento
+from src.dominio.nfse import ResumoDps, resumo_da_dps
 from tests.evento_ficticio import gerar_evento
 from tests.nfse_ficticia import CHAVE, gerar_nfse
 from tests.pfx import chave_de_teste, gerar_certificado
 from tests.test_dps import _dps, xsd  # noqa: F401 (fixture)
+
+# Com o adaptador de assinatura de verdade, como os scripts o montam (T-043).
+conferir_substituicao = partial(
+    dominio_evento.conferir_substituicao, conferir_assinatura=conferir_assinatura_do_sistema
+)
 
 N = {"n": NS}
 # Chave fictícia da nota substituída: mesmo município, tipo e CNPJ de _dps(), outro número.

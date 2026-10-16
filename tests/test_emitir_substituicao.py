@@ -15,7 +15,7 @@ from src.assinatura import assinar_dps
 from src.certificado import Certificado
 from src.codec import codificar
 from src.config import RAIZ
-from src.dps import NS, Tomador, para_xml
+from src.dominio.dps import NS, Tomador, para_xml
 from src.emitente import carregar_emitente
 from tests.evento_ficticio import CANCELAMENTO, SUBSTITUICAO, gerar_evento
 from tests.nfse_ficticia import CHAVE, gerar_nfse

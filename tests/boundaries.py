@@ -1,4 +1,5 @@
-"""Confere as boundaries de docs/SPEC.md §3 pelos imports de src/ e scripts/ (T-016, T-015, T-042).
+"""Confere as boundaries de docs/SPEC.md §3 pelos imports de src/ e scripts/ (T-016, T-015, T-042,
+T-043).
 
 Lê só os `import` e `from ... import` do código, em qualquer nível (inclusive dentro de
 função ou de `try`). Import feito por nome em texto (`importlib.import_module`, `__import__`)
@@ -37,26 +38,15 @@ REDE = frozenset(
         "websockets",
     }
 )
-# Módulos que carregam ou usam certificado e chave privada.
-CERTIFICADO = frozenset(
-    {"src.certificado", "src.assinatura", "cryptography", "OpenSSL", "signxml", "xmlsec"}
-)
-
 CLIENT = "src.client"
-DPS = "src.dps"
 SCRIPTS = "scripts"
 
-# B-1: o que src/dps.py não pode alcançar, nem por intermédio de outro módulo de src/.
-PROIBIDO_PARA_DPS = REDE | CERTIFICADO | {CLIENT}
-
+# B-4 (T-043, DEC-078): src/dominio/ só importa biblioteca padrão, lxml e o próprio domínio.
+# Amplia a B-1, que valia só para src/dps.py, hoje src/dominio/dps/.
+DOMINIO = "src.dominio"
+LXML = "lxml"
 # B-5 (T-042, DEC-077): src/aplicacao/ só importa biblioteca padrão, domínio e a si mesma.
 APLICACAO = "src.aplicacao"
-DOMINIO = "src.dominio"
-# Módulos que a arquitetura-alvo põe no domínio e que ainda estão soltos em src/; a lista
-# só encolhe, e a T-043, que os leva para src/dominio/, a esvazia.
-DOMINIO_FORA_DO_LUGAR = frozenset(
-    {"src.dps", "src.nfse", "src.evento", "src.erros", "src.lista_servicos"}
-)
 
 
 def ler_fontes(raiz: Path) -> dict[str, str]:
@@ -100,42 +90,60 @@ def _dependencias(caminho: str, codigo: str) -> tuple[str, set[str]]:
     return nome, importados
 
 
-def _b1(deps: dict[str, set[str]]) -> set[str]:
-    """Percorre em largura o que src.dps alcança dentro de src/; aponta o caminho mais curto."""
-    achadas = set()
-    vistos = {DPS}
-    fila = deque([[DPS]])
+def _dentro(nome: str, pacote: str) -> bool:
+    return nome == pacote or nome.startswith(pacote + ".")
+
+
+def _biblioteca_padrao(nome: str) -> bool:
+    return nome.split(".")[0] in sys.stdlib_module_names
+
+
+def _mais_curtos(proibidos: dict[str, list[str]]) -> list[list[str]]:
+    """Só o nome mais curto proibido: `src.client.X` aparece como `src.client`."""
+    return [
+        cadeia
+        for alvo, cadeia in proibidos.items()
+        if not any(acima in proibidos for acima in _prefixos(alvo)[:-1])
+    ]
+
+
+def _permitido_no_dominio(alvo: str) -> bool:
+    return (
+        alvo == "src" or _biblioteca_padrao(alvo) or _dentro(alvo, LXML) or _dentro(alvo, DOMINIO)
+    )
+
+
+def _b4(nome: str, deps: dict[str, set[str]]) -> set[str]:
+    """Percorre em largura o que um módulo do domínio alcança; aponta o caminho mais curto.
+
+    Os outros módulos do domínio têm a própria conferência, então o percurso só segue por
+    `src` (o `src/__init__.py`, executado antes de qualquer import de `src.`).
+    """
+    proibidos: dict[str, list[str]] = {}
+    vistos = {nome}
+    fila = deque([[nome]])
     while fila:
         cadeia = fila.popleft()
         for alvo in sorted(deps.get(cadeia[-1], ())):
             if alvo in vistos:
                 continue
             vistos.add(alvo)
-            if alvo in PROIBIDO_PARA_DPS:
-                achadas.add("B-1: " + " -> ".join([*cadeia, alvo]))
-            elif alvo in deps:
+            if not _permitido_no_dominio(alvo):
+                proibidos[alvo] = [*cadeia, alvo]
+            elif alvo in deps and not _dentro(alvo, DOMINIO):
                 fila.append([*cadeia, alvo])
-    return achadas
-
-
-def _dentro(nome: str, pacote: str) -> bool:
-    return nome == pacote or nome.startswith(pacote + ".")
+    return {"B-4: " + " -> ".join(cadeia) for cadeia in _mais_curtos(proibidos)}
 
 
 def _permitido_na_aplicacao(alvo: str) -> bool:
-    if alvo == "src" or alvo.split(".")[0] in sys.stdlib_module_names:
+    if alvo == "src" or _biblioteca_padrao(alvo):
         return True
-    return any(_dentro(alvo, ok) for ok in (APLICACAO, DOMINIO, *DOMINIO_FORA_DO_LUGAR))
+    return _dentro(alvo, APLICACAO) or _dentro(alvo, DOMINIO)
 
 
 def _b5(nome: str, importados: set[str]) -> set[str]:
-    """Aponta só o nome mais curto proibido: `src.client.X` aparece como `src.client`."""
-    proibidos = {alvo for alvo in importados if not _permitido_na_aplicacao(alvo)}
-    return {
-        f"B-5: {nome} -> {alvo}"
-        for alvo in proibidos
-        if not any(acima in proibidos for acima in _prefixos(alvo)[:-1])
-    }
+    proibidos = {alvo: [nome, alvo] for alvo in importados if not _permitido_na_aplicacao(alvo)}
+    return {"B-5: " + " -> ".join(cadeia) for cadeia in _mais_curtos(proibidos)}
 
 
 def dependencias(fontes: dict[str, str]) -> dict[str, set[str]]:
@@ -147,13 +155,15 @@ def violacoes(fontes: dict[str, str]) -> list[str]:
     """Aponta cada import que cruza uma boundary, no formato `B-n: módulo -> ... -> alvo`."""
     deps = dependencias(fontes)
 
-    achadas = _b1(deps)
+    achadas = set()
     for nome, importados in deps.items():
         if nome != CLIENT and not nome.startswith(CLIENT + "."):
             achadas.update(f"B-2: {nome} -> {alvo}" for alvo in importados & REDE)
         # B-3 vale para src/; scripts/ pode depender de si mesmo.
         if not nome.startswith(SCRIPTS + ".") and SCRIPTS in importados:
             achadas.add(f"B-3: {nome} -> {SCRIPTS}")
+        if _dentro(nome, DOMINIO):
+            achadas.update(_b4(nome, deps))
         if _dentro(nome, APLICACAO):
             achadas.update(_b5(nome, importados))
     return sorted(achadas)

@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config import carregar_config
-from src.dps import (
+from src.dominio.dps import (
     Dps,
     IbsCbs,
     Obra,

@@ -4,18 +4,23 @@ O cliente aqui é um dublê que registra as chamadas; o HTTP de verdade é testa
 tests/test_client.py.
 """
 
+from functools import partial
 from pathlib import Path
 
 import pytest
 
-from src.assinatura import assinar_dps
+from src import emissao
+from src.assinatura import assinar_dps, conferir_assinatura_do_sistema
 from src.certificado import Certificado
 from src.config import XSD_DIR_PADRAO
-from src.emissao import DpsJaEmitida, EnvioIncerto, emitir
-from src.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
-from src.nfse import NfseEmitida, localizar_xsd_nfse
+from src.dominio.erros import ErroConexao, MensagemApi, RejeicaoApi, RespostaInesperada
+from src.dominio.nfse import NfseEmitida, localizar_xsd_nfse
+from src.emissao import DpsJaEmitida, EnvioIncerto
 from tests.nfse_ficticia import CHAVE, gerar_nfse
 from tests.pfx import chave_de_teste, gerar_certificado
+
+# Com o adaptador de assinatura de verdade, como os scripts o montam (T-043).
+emitir = partial(emissao.emitir, conferir_assinatura=conferir_assinatura_do_sistema)
 
 DPS = (Path(__file__).parent / "dados" / "dps-sem-opcionais.xml").read_bytes()
 ID_DPS = "DPS330455721122233300018100001000000000000042"

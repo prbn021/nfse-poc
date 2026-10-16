@@ -17,10 +17,10 @@ from pathlib import Path
 
 from lxml import etree
 
-from src.aplicacao.portas import SefinEmissao
-from src.dps import NS
-from src.erros import ErroConexao, RejeicaoApi, RespostaInesperada
-from src.nfse import NfseEmitida, conferir_nfse
+from src.aplicacao.portas import ConferidorAssinatura, SefinEmissao
+from src.dominio.dps import NS
+from src.dominio.erros import ErroConexao, RejeicaoApi, RespostaInesperada
+from src.dominio.nfse import NfseEmitida, conferir_nfse
 
 _DS = "http://www.w3.org/2000/09/xmldsig#"
 
@@ -71,8 +71,15 @@ def _id_da_dps_assinada(xml: bytes) -> str:
     return id_dps
 
 
-def emitir(cliente: SefinEmissao, dps_assinada: bytes, xsd_nfse: Path) -> Resultado:
-    """Envia a DPS uma vez e confere a NFS-e devolvida."""
+def emitir(
+    cliente: SefinEmissao,
+    dps_assinada: bytes,
+    xsd_nfse: Path,
+    *,
+    conferir_assinatura: ConferidorAssinatura,
+) -> Resultado:
+    """Envia a DPS uma vez e confere a NFS-e devolvida, com a assinatura do sistema
+    conferida por `conferir_assinatura` (T-043)."""
     id_dps = _id_da_dps_assinada(dps_assinada)
 
     chave = cliente.chave_da_dps(id_dps)
@@ -114,5 +121,11 @@ def emitir(cliente: SefinEmissao, dps_assinada: bytes, xsd_nfse: Path) -> Result
     # Sem `id_dps` na resposta (DEC-045), a conferência compara a DPS embutida na nota.
     if nfse.id_dps is not None and nfse.id_dps != id_dps:
         raise RespostaInesperada(201, "idDps devolvido não é o da DPS enviada")
-    problemas = conferir_nfse(nfse.xml, chave=nfse.chave, id_dps=id_dps, xsd=xsd_nfse)
+    problemas = conferir_nfse(
+        nfse.xml,
+        chave=nfse.chave,
+        id_dps=id_dps,
+        xsd=xsd_nfse,
+        conferir_assinatura=conferir_assinatura,
+    )
     return Resultado(nfse=nfse, problemas=problemas, recuperada=recuperada, falha=falha)

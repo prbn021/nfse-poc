@@ -11,7 +11,7 @@ from lxml import etree
 
 from src.codec import codificar, decodificar
 from src.config import RAIZ, XSD_DIR_PADRAO, Config
-from src.dps import NS
+from src.dominio.dps import NS
 from tests.nfse_ficticia import CHAVE, gerar_nfse
 from tests.pfx import CNPJ, gerar_pfx
 

@@ -7,7 +7,7 @@ import pytest
 from lxml import etree
 
 from src.config import XSD_DIR_PADRAO
-from src.dps import (
+from src.dominio.dps import (
     CODIGOS_DE_OBRA,
     NS,
     Dps,
